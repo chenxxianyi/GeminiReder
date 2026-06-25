@@ -7,6 +7,7 @@ import BookCard from './components/BookCard.vue';
 import BookmarkPanel from './components/BookmarkPanel.vue';
 import TableOfContents from './components/TableOfContents.vue';
 import ArticleWriterPanel from './components/ArticleWriterPanel.vue';
+import ZCodeShell from './components/zcode/ZCodeShell.vue';
 import {
   Menu,
   Plus,
@@ -25,10 +26,22 @@ import {
   X,
   BookOpen,
   Sun,
-  Moon
+  Moon,
+  LayoutDashboard
 } from 'lucide-vue-next';
 
 const bookStore = useBookStore();
+
+// Shell mode state
+const shellMode = ref(localStorage.getItem('shell_mode') || 'gemini');
+
+// Set shell mode
+const setShellMode = (mode) => {
+  shellMode.value = mode;
+  localStorage.setItem('shell_mode', mode);
+};
+
+// ============ Gemini Shell State ============
 const fileInput = ref(null);
 const readerArea = ref(null);
 const fakeInput = ref('');
@@ -39,8 +52,8 @@ const showSearch = ref(false);
 const showLibrary = ref(false);
 const showBookmarks = ref(false);
 const showBossMode = ref(false);
-const showArticleWriter = ref(false); // Modal editor
-const showArticleCanvas = ref(false); // Inline article view
+const showArticleWriter = ref(false);
+const showArticleCanvas = ref(false);
 const searchQuery = ref('');
 const searchResults = ref([]);
 const isSearching = ref(false);
@@ -217,13 +230,12 @@ const initReader = async () => {
       const iframe = view.document;
       if (iframe) {
         iframe.addEventListener('keydown', handleKeydown);
-        // Force apply styles to iframe
         applyFontThemeToView(view);
       }
     });
 
     const navigation = await book.loaded.navigation;
-    
+
     const processTocItems = (items) => {
       return items.map(item => {
         const processed = {
@@ -231,31 +243,29 @@ const initReader = async () => {
           href: item.href || item.id,
           label: item.label || item.title || '未命名章节'
         };
-        
+
         if (item.subitems && item.subitems.length > 0) {
           processed.subitems = processTocItems(item.subitems);
         }
-        
+
         return processed;
       });
     };
-    
+
     toc.value = processTocItems(navigation.toc || []);
 
     await rendition.display();
-    
-    // Re-apply theme to ensure it takes effect after display
     applyFontTheme();
 
-  const currentBookObj = bookStore.books.find(b => b.id === bookStore.currentBookId);
-  if (currentBookObj && currentBookObj.cfi) {
-    await rendition.display(currentBookObj.cfi);
-  }
+    const currentBookObj = bookStore.books.find(b => b.id === bookStore.currentBookId);
+    if (currentBookObj && currentBookObj.cfi) {
+      await rendition.display(currentBookObj.cfi);
+    }
 
-  rendition.on('relocated', (location) => {
-    bookStore.updateProgress(bookStore.currentBookId, location.start.cfi);
-  });
-  handleResize();
+    rendition.on('relocated', (location) => {
+      bookStore.updateProgress(bookStore.currentBookId, location.start.cfi);
+    });
+    handleResize();
   } catch (e) {
     console.error("Error rendering book:", e);
   }
@@ -263,12 +273,11 @@ const initReader = async () => {
 
 const applyFontThemeToView = (view) => {
   if (!view || !view.document) return;
-  
+
   const doc = view.document;
   const head = doc.querySelector('head');
   if (!head) return;
 
-  // Remove existing custom style
   const existingStyle = doc.querySelector('#gemini-theme-style');
   if (existingStyle) {
     existingStyle.remove();
@@ -276,13 +285,11 @@ const applyFontThemeToView = (view) => {
 
   const fontFamily = `"${bookStore.fontFamily}", monospace`;
   const fontSize = `${bookStore.fontSize}px`;
-  
+
   const bgColor = isDark.value ? '#131314' : '#ffffff';
   const textColor = isDark.value ? '#e3e3e3' : '#1f1f1f';
   const headingColor = isDark.value ? '#a8c7fa' : '#1b6ef3';
   const borderColor = isDark.value ? '#444746' : '#e0e3e1';
-  const scrollThumb = isDark.value ? 'rgba(196, 199, 197, 0.22)' : 'rgba(95, 99, 104, 0.28)';
-  const scrollThumbHover = isDark.value ? 'rgba(196, 199, 197, 0.35)' : 'rgba(95, 99, 104, 0.45)';
 
   const style = doc.createElement('style');
   style.id = 'gemini-theme-style';
@@ -323,7 +330,6 @@ const applyFontThemeToView = (view) => {
       border: none;
       max-width: 100% !important;
     }
-    /* Hide scrollbar for Epub iframe internal */
     ::-webkit-scrollbar {
       display: none;
     }
@@ -333,26 +339,23 @@ const applyFontThemeToView = (view) => {
 
 const applyFontTheme = () => {
   if (!rendition) return;
-  
-  // Apply to all current views
+
   if (rendition.views) {
     rendition.views().forEach(view => {
-       applyFontThemeToView(view);
+      applyFontThemeToView(view);
     });
   }
 
   const fontFamily = `"${bookStore.fontFamily}", monospace`;
   const fontSize = `${bookStore.fontSize}px`;
-  
-  // Dynamic colors based on theme
+
   const bgColor = isDark.value ? '#131314' : '#ffffff';
   const textColor = isDark.value ? '#e3e3e3' : '#1f1f1f';
   const headingColor = isDark.value ? '#a8c7fa' : '#1b6ef3';
   const borderColor = isDark.value ? '#444746' : '#e0e3e1';
   const scrollThumb = isDark.value ? 'rgba(196, 199, 197, 0.22)' : 'rgba(95, 99, 104, 0.28)';
   const scrollThumbHover = isDark.value ? 'rgba(196, 199, 197, 0.35)' : 'rgba(95, 99, 104, 0.45)';
-  
-  // Revert to default theme for simplicity and stability
+
   rendition.themes.default({
     'body': {
       'background-color': `${bgColor} !important`,
@@ -408,10 +411,9 @@ const applyFontTheme = () => {
     }
   });
 
-  // Force update views
   if (rendition.views) {
     rendition.views().forEach(view => {
-       if (view && view.pane) view.pane.render();
+      if (view && view.pane) view.pane.render();
     });
   }
 };
@@ -427,7 +429,7 @@ const handleFileUpload = async (event) => {
 
 const selectBook = (id) => {
   bookStore.setCurrentBook(id);
-  showTOC.value = false; // 切换书籍时关闭目录面板
+  showTOC.value = false;
   initReader();
 };
 
@@ -438,12 +440,12 @@ const deleteBook = async (id, event) => {
 
 const addBookmark = () => {
   if (!rendition || !bookStore.currentBookId) return;
-  
+
   const currentLocation = rendition.currentLocation();
   if (currentLocation && currentLocation.start) {
     const cfi = currentLocation.start.cfi;
     const label = prompt('请输入书签名称：', `书签 ${new Date().toLocaleString('zh-CN')}`);
-    
+
     if (label !== null && label.trim()) {
       bookStore.addBookmark(bookStore.currentBookId, cfi, label.trim());
       alert('书签添加成功！');
@@ -459,24 +461,23 @@ const jumpToBookmark = (cfi) => {
 
 const navigateToChapter = async (href) => {
   if (!rendition || !href || !book) return;
-  
+
   try {
     showTOC.value = false;
     await rendition.display(href);
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     const iframe = readerArea.value?.querySelector('iframe');
     if (iframe && iframe.contentWindow) {
       try {
         iframe.contentWindow.scrollTo(0, 0);
       } catch (e) {
-        // 跨域限制，忽略
+        // Cross-origin restriction, ignore
       }
     }
-    
   } catch (error) {
     console.error('Navigation error:', error);
-    
+
     try {
       const spineItem = book.spine.get(href);
       if (spineItem) {
@@ -484,7 +485,7 @@ const navigateToChapter = async (href) => {
       }
     } catch (e) {
       console.error('Spine navigation failed:', e);
-      
+
       try {
         const cleanHref = href.split('#')[0];
         await rendition.display(cleanHref);
@@ -509,26 +510,26 @@ const handleLibraryBookClick = (id) => {
 
 const handleSearch = async () => {
   if (!book || !searchQuery.value.trim()) return;
-  
+
   isSearching.value = true;
   searchResults.value = [];
-  
+
   try {
     const results = await book.spine.spineItems.reduce(async (acc, item) => {
       const accumulated = await acc;
       const doc = await item.load(book.load.bind(book));
       const text = doc.body.textContent;
-      
+
       if (text.includes(searchQuery.value)) {
         accumulated.push({
           cfi: item.cfiBase,
           excerpt: text.substring(0, 200)
         });
       }
-      
+
       return accumulated;
     }, Promise.resolve([]));
-    
+
     searchResults.value = results;
   } catch (error) {
     console.error('Search error:', error);
@@ -542,8 +543,7 @@ const handleKeydown = async (e) => {
   if (e.ctrlKey && e.key.toLowerCase() === 'b') {
     e.preventDefault();
     e.stopPropagation();
-    
-    // Save current progress before switching to boss mode
+
     if (!showBossMode.value && rendition) {
       const location = rendition.currentLocation();
       if (location && location.start && location.start.cfi) {
@@ -551,46 +551,39 @@ const handleKeydown = async (e) => {
       }
     }
 
-    // Toggle Boss Mode
     showBossMode.value = !showBossMode.value;
-    
+
     if (!showBossMode.value) {
-      // Switching back to Reader Mode
       setTimeout(async () => {
-         // We don't need to re-init reader with v-show, but we might need to refresh view
-         if (rendition) {
-            // Restore position
-            const currentBookObj = bookStore.books.find(b => b.id === bookStore.currentBookId);
-            if (currentBookObj && currentBookObj.cfi) {
-               await rendition.display(currentBookObj.cfi);
-            } else {
-               // Fallback if no CFI
-               const location = rendition.currentLocation();
-               if (location && location.start) {
-                  await rendition.display(location.start.cfi);
-               }
+        if (rendition) {
+          const currentBookObj = bookStore.books.find(b => b.id === bookStore.currentBookId);
+          if (currentBookObj && currentBookObj.cfi) {
+            await rendition.display(currentBookObj.cfi);
+          } else {
+            const location = rendition.currentLocation();
+            if (location && location.start) {
+              await rendition.display(location.start.cfi);
             }
-         }
+          }
+        }
       }, 50);
     }
     return;
   }
-  
-  if (showBossMode.value) return; // Disable other keys in boss mode
+
+  if (showBossMode.value) return;
   if (isTypingTarget(e.target)) return;
 
-  // Forward arrow keys to rendition if event came from main window
   if (rendition && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-     // Let epub.js handle navigation or implement custom navigation
-     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSection();
-     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSection();
-     e.preventDefault();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSection();
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSection();
+    e.preventDefault();
   }
 
   if (e.key === 'Enter' && rendition) {
     e.preventDefault();
     rendition.next();
-    fakeInput.value = ''; 
+    fakeInput.value = '';
   } else if (e.key === 'ArrowUp' && rendition) {
     e.preventDefault();
     rendition.prev();
@@ -630,16 +623,28 @@ const handleResize = () => {
   });
 };
 
+// Enter ZCode shell
+const enterZCodeShell = () => {
+  setShellMode('zcode');
+};
+
+// Switch back to Gemini shell
+const switchToGemini = () => {
+  setShellMode('gemini');
+};
+
 onMounted(async () => {
-  // Init theme
   if (isDark.value) {
     document.documentElement.classList.add('dark');
   }
-  
+
   await bookStore.init();
-  if (bookStore.currentBookId) {
+
+  // Only init reader if in Gemini mode
+  if (shellMode.value === 'gemini' && bookStore.currentBookId) {
     initReader();
   }
+
   window.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', handleResize);
 });
@@ -651,12 +656,18 @@ onUnmounted(() => {
     clearTimeout(articleSaveTimer);
   }
 });
-
 </script>
 
 <template>
-  <div class="flex h-screen w-screen bg-gem-bg text-gem-text-primary font-sans overflow-hidden">
-    
+  <!-- ZCode Shell -->
+  <ZCodeShell
+    v-if="shellMode === 'zcode'"
+    @switch-to-gemini="switchToGemini"
+  />
+
+  <!-- Gemini Shell (Original) -->
+  <div v-else class="flex h-screen w-screen bg-gem-bg text-gem-text-primary font-sans overflow-hidden">
+
     <div v-if="showSidebar" class="flex flex-col w-[280px] bg-gem-sidebar flex-shrink-0 transition-all duration-300 select-none">
       <!-- Top Section: Logo & New Chat -->
       <div class="flex items-center justify-between px-4 pt-3 pb-2">
@@ -765,7 +776,7 @@ onUnmounted(() => {
     </div>
 
     <div class="flex-1 flex flex-col h-full relative z-0">
-      
+
       <div class="flex items-center justify-between px-5 py-3 flex-shrink-0">
         <div class="flex items-center">
           <Menu v-if="!showSidebar" :size="24" class="text-gem-text-secondary cursor-pointer hover:text-gem-text-primary mr-4" @click="showSidebar = !showSidebar" />
@@ -781,15 +792,23 @@ onUnmounted(() => {
             <span class="text-xs">▼</span>
           </div>
           <Sparkles :size="20" class="text-gem-text-secondary hover:text-white cursor-pointer" />
-          <History :size="20" class="text-gem-text-secondary hover:text-white cursor-pointer" @click="showBookmarks = true" title="书签" />
           <HelpCircle :size="20" class="text-gem-text-secondary hover:text-gem-text-primary cursor-pointer" />
           <Settings :size="20" class="text-gem-text-secondary hover:text-gem-text-primary cursor-pointer" @click="showFontSettings = true" />
-          
+
           <!-- Theme Toggle -->
           <div @click="toggleTheme" class="cursor-pointer text-gem-text-secondary hover:text-gem-text-primary transition-colors" :title="isDark ? '切换到浅色模式' : '切换到深色模式'">
              <Sun v-if="isDark" :size="20" />
              <Moon v-else :size="20" />
           </div>
+
+          <!-- Enter ZCode Shell Button -->
+          <button
+            class="p-2 rounded-full text-gem-text-secondary hover:bg-gem-hover hover:text-gem-text-primary transition-colors"
+            title="进入 ZCode 工作台"
+            @click="enterZCodeShell"
+          >
+            <LayoutDashboard :size="20" />
+          </button>
 
           <div class="w-8 h-8 rounded-full bg-gray-500 cursor-pointer overflow-hidden border-2 border-transparent hover:border-gem-text-primary transition-colors">
              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="User" />
@@ -810,7 +829,7 @@ onUnmounted(() => {
                     <div class="text-gem-text-primary text-[15px] leading-relaxed mb-4">
                        正在分析 Kubernetes 集群日志中的异常 pod 重启问题。根据提供的日志片段，初步判断是由于 OOMKilled (Out Of Memory) 导致的。
                     </div>
-                    
+
                     <div class="bg-[#1e1e1e] rounded-lg border border-[#444746] overflow-hidden font-mono text-sm mb-4">
                        <div class="bg-[#2d2e2f] px-4 py-2 flex items-center justify-between border-b border-[#444746]">
                           <span class="text-xs text-gem-text-secondary">k8s-pod-logs.txt</span>
@@ -835,11 +854,11 @@ onUnmounted(() => {
                           <div><span class="text-purple-400">print</span>(f<span class="text-orange-400">"建议将 {pod_name} 的内存限制上调至 512Mi"</span>)</div>
                        </div>
                     </div>
-   
+
                     <div class="text-gem-text-primary text-[15px] leading-relaxed">
                        建议检查部署配置文件（Deployment YAML），将 `resources.limits.memory` 从当前的 256Mi 调整为 512Mi 或更高，以避免容器被系统强制终止。同时，可以使用上述脚本持续监控内存泄漏情况。
                     </div>
-                    
+
                     <div class="flex items-center space-x-1 mt-3">
                        <button class="p-2 hover:bg-[#333537] rounded-full text-gem-text-secondary transition-colors">
                           <ThumbsUp :size="18" />
@@ -864,7 +883,7 @@ onUnmounted(() => {
                  <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden mt-1">
                     <img src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" alt="Gemini" class="w-full h-full" />
                  </div>
-                 
+
                  <div class="flex-1 min-w-0">
                     <div class="text-gem-text-primary text-[15px] leading-relaxed mb-2">
                        好的，这是关于该日志文件的详细分析：
@@ -900,9 +919,9 @@ onUnmounted(() => {
                  <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden mt-1">
                     <img src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" alt="Gemini" class="w-full h-full" />
                  </div>
-                 
+
                  <div class="flex-1 min-w-0">
-                    <div 
+                    <div
                        class="text-gem-text-primary text-[15px] leading-relaxed mb-2 whitespace-pre-wrap font-sans outline-none focus:ring-1 focus:ring-gem-blue rounded p-1"
                        contenteditable="true"
                        @input="handleArticleCanvasInput"
@@ -941,7 +960,7 @@ onUnmounted(() => {
         <div class="w-full max-w-3xl relative">
            <div class="bg-gem-surface rounded-[28px] flex flex-col border border-transparent hover:border-gem-border transition-colors overflow-hidden">
               <div class="flex items-center px-4 py-3">
-                 <button 
+                 <button
                     class="p-2 rounded-full text-gem-text-primary mr-3 transition-colors"
                     :class="showArticleCanvas ? 'bg-gem-blue-bg text-gem-blue' : 'bg-gem-hover'"
                     @click="toggleArticleCanvas"
@@ -949,10 +968,10 @@ onUnmounted(() => {
                  >
                     <Plus :size="18" />
                  </button>
-                 <input 
+                 <input
                     v-model="fakeInput"
-                    type="text" 
-                    :placeholder="showArticleCanvas ? 'Input paragraph, press Enter to append' : 'Continue asking'" 
+                    type="text"
+                    :placeholder="showArticleCanvas ? 'Input paragraph, press Enter to append' : 'Continue asking'"
                     class="flex-1 bg-transparent border-none outline-none text-gem-text-primary text-base placeholder-gem-text-muted h-10 font-sans"
                     @keydown="handleInputKeydown"
                  />
@@ -963,7 +982,7 @@ onUnmounted(() => {
                     <button class="p-2 hover:bg-gem-hover rounded-full text-gem-text-secondary transition-colors">
                        <Mic :size="20" />
                     </button>
-                    <button 
+                    <button
                        class="p-2 rounded-full transition-colors"
                        :class="fakeInput ? 'bg-gem-blue text-black hover:opacity-90' : 'text-gem-text-muted hover:bg-gem-hover'"
                        @click="handleInputSubmit"
@@ -983,20 +1002,20 @@ onUnmounted(() => {
                  </div>
               </div>
            </div>
-           
+
            <div class="text-center text-[11px] text-gem-text-muted mt-3 mb-1">
              生成式 AI 展示的信息（包括与人有关的信息）可能不够准确，请仔细核查回答内容。
            </div>
         </div>
       </div>
     </div>
-    
+
     <FontSettings :show="showFontSettings" @close="showFontSettings = false" @apply="handleFontApply" />
 
-    <BookmarkPanel 
-      :show="showBookmarks" 
-      :bookId="bookStore.currentBookId" 
-      @close="showBookmarks = false" 
+    <BookmarkPanel
+      :show="showBookmarks"
+      :bookId="bookStore.currentBookId"
+      @close="showBookmarks = false"
       @jumpTo="jumpToBookmark"
       @addBookmark="addBookmark"
     />
@@ -1032,17 +1051,17 @@ onUnmounted(() => {
            </h3>
            <X :size="24" class="text-gem-text-secondary cursor-pointer hover:text-white" @click="showLibrary = false" />
          </div>
-         
+
          <div class="flex-1 overflow-y-auto p-6">
             <div v-if="bookStore.books.length === 0" class="text-center text-gem-text-muted mt-20 flex flex-col items-center">
               <BookOpen :size="48" class="mb-4 opacity-50" />
               <p class="text-lg">暂无书籍</p>
               <button @click="fileInput.click()" class="mt-4 text-gem-blue hover:underline">点击上传 EPUB 电子书</button>
             </div>
-            
+
             <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-               <BookCard 
-                 v-for="book in bookStore.books" 
+               <BookCard
+                 v-for="book in bookStore.books"
                  :key="book.id"
                  :book="book"
                  @click="handleLibraryBookClick"

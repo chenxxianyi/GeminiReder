@@ -1,0 +1,317 @@
+/* ZCode Desktop Workbench Theme - High Fidelity Dark Theme */
+
+:root {
+  /* Background layers - matching VSCode dark theme */
+  --zc-bg: #1e1e1e;
+  --zc-activity-bar: #333333;
+  --zc-sidebar: #252526;
+  --zc-panel: #2d2d30;
+  --zc-panel-raised: #3c3c3c;
+  --zc-input-bg: #3c3c3c;
+  --zc-editor-bg: #1e1e1e;
+  --zc-tab-bg: #2d2d30;
+  --zc-tab-active-bg: #1e1e1e;
+
+  /* Borders */
+  --zc-border: #474747;
+  --zc-border-soft: #37373d;
+
+  /* Text */
+  --zc-text: #cccccc;
+  --zc-text-muted: #858585;
+  --zc-text-dim: #6e6e6e;
+
+  /* Interactive */
+  --zc-hover: #2a2d2e;
+  --zc-active: #37373d;
+
+  /* Accent colors */
+  --zc-accent: #f5b642;
+  --zc-accent-hover: #ffcc66;
+  --zc-danger: #ff5a66;
+  --zc-success: #37c871;
+  --zc-info: #75beff;
+
+  /* Fixed dimensions */
+  --zc-activity-bar-w: 48px;
+  --zc-titlebar-h: 35px;
+  --zc-sidebar-w: 300px;
+  --zc-commandbox-h: 90px;
+  --zc-commandbox-max-w: 800px;
+  --zc-content-max-w: 800px;
+}
+
+/* Reset & Base */
+.zcode-app {
+  background-color: var(--zc-bg);
+  color: var(--zc-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ZCode scrollbar styling */
+.zcode-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.zcode-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.zcode-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(121, 121, 121, 0.4);
+  border-radius: 0;
+}
+
+.zcode-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(121, 121, 121, 0.7);
+}
+
+/* ZCode focus ring */
+.zcode-focus {
+  outline: none;
+}
+
+.zcode-focus:focus-visible {
+  outline: 1px solid var(--zc-accent);
+  outline-offset: -1px;
+}
+
+/* ZCode buttons */
+.zcode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 0;
+  color: var(--zc-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  min-width: 22px;
+  height: 22px;
+}
+
+.zcode-btn:hover {
+  color: var(--zc-text);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.zcode-btn:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.zcode-btn-accent {
+  color: var(--zc-accent);
+}
+
+.zcode-btn-accent:hover {
+  background-color: rgba(245, 182, 66, 0.15);
+}
+
+.zcode-btn-danger {
+  color: var(--zc-danger);
+}
+
+.zcode-btn-danger:hover {
+  background-color: rgba(255, 90, 102, 0.15);
+}
+
+/* Activity Bar item */
+.zcode-activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  color: var(--zc-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.1s ease;
+}
+
+.zcode-activity-item:hover {
+  color: var(--zc-text);
+}
+
+.zcode-activity-item.active {
+  color: var(--zc-text);
+}
+
+.zcode-activity-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--zc-accent);
+}
+
+/* Sidebar section labels */
+.zcode-sidebar-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--zc-text-dim);
+  padding: 8px 20px 4px 20px;
+  cursor: default;
+}
+
+.zcode-sidebar-section-label:hover {
+  color: var(--zc-text-muted);
+}
+
+/* Sidebar item */
+.zcode-sidebar-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 4px 20px;
+  color: var(--zc-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  height: 22px;
+  transition: background-color 0.1s ease;
+}
+
+.zcode-sidebar-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--zc-text);
+}
+
+.zcode-sidebar-item.active {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--zc-text);
+}
+
+/* Title bar */
+.zcode-title-bar {
+  height: var(--zc-titlebar-h);
+  background-color: var(--zc-activity-bar);
+  border-bottom: 1px solid var(--zc-border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  user-select: none;
+}
+
+.zcode-title-bar-menu {
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  height: 100%;
+  color: var(--zc-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.zcode-title-bar-menu:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--zc-text);
+}
+
+/* Input box styling */
+.zcode-input-box {
+  background-color: var(--zc-input-bg);
+  border: 1px solid transparent;
+  color: var(--zc-text);
+  font-size: 13px;
+  padding: 4px 8px;
+  outline: none;
+  transition: border-color 0.1s ease;
+}
+
+.zcode-input-box:focus {
+  border-color: var(--zc-accent);
+}
+
+.zcode-input-box::placeholder {
+  color: var(--zc-text-dim);
+}
+
+/* Command palette */
+.zcode-command-palette {
+  background-color: var(--zc-panel);
+  border: 1px solid var(--zc-border);
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Editor tabs */
+.zcode-tabs-container {
+  display: flex;
+  align-items: center;
+  height: 35px;
+  background-color: var(--zc-tab-bg);
+  border-bottom: 1px solid var(--zc-border);
+}
+
+.zcode-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 35px;
+  color: var(--zc-text-muted);
+  background-color: var(--zc-tab-bg);
+  border-right: 1px solid var(--zc-border);
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.zcode-tab:hover {
+  background-color: var(--zc-tab-active-bg);
+}
+
+.zcode-tab.active {
+  background-color: var(--zc-tab-active-bg);
+  color: var(--zc-text);
+  border-top: 1px solid var(--zc-accent);
+  margin-top: -1px;
+}
+
+/* Status bar */
+.zcode-status-bar {
+  height: 22px;
+  background-color: var(--zc-accent);
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.zcode-status-item {
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  height: 100%;
+  cursor: pointer;
+}
+
+.zcode-status-item:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Animations */
+@keyframes zcode-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.zcode-animate-in {
+  animation: zcode-fade-in 0.15s ease-out;
+}
