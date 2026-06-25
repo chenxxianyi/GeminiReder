@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Roboto:wght@400;500&family=Source+Code+Pro:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light Theme (Default) */
+  --gem-bg: #ffffff;
+  --gem-sidebar: #f0f4f9;
+  --gem-surface: #f0f4f9;
+  --gem-text-primary: #1f1f1f;
+  --gem-text-secondary: #444746;
+  --gem-text-muted: #5e5e5e;
+  --gem-blue-bg: #c2e7ff;
+  --gem-badge: #e1e3e1;
+  --gem-border: #e0e3e1;
+  --gem-hover: #e0e3e1;
+  --code-bg: #f8f9fa;
+  --gem-scrollbar-thumb: rgba(95, 99, 104, 0.28);
+  --gem-scrollbar-thumb-hover: rgba(95, 99, 104, 0.45);
+}
+
+.dark {
+  /* Dark Theme */
+  --gem-bg: #131314;
+  --gem-sidebar: #1e1f20;
+  --gem-surface: #1e1f20;
+  --gem-text-primary: #e3e3e3;
+  --gem-text-secondary: #c4c7c5;
+  --gem-text-muted: #8e918f;
+  --gem-blue-bg: #004a77;
+  --gem-badge: #444746;
+  --gem-border: #444746;
+  --gem-hover: #333537;
+  --gem-card-bg: #2d2e2f;
+  --code-bg: #1e1e1e;
+  --gem-scrollbar-thumb: rgba(196, 199, 197, 0.22);
+  --gem-scrollbar-thumb-hover: rgba(196, 199, 197, 0.35);
+}
+
+body {
+  @apply bg-gem-bg text-gem-text-primary;
+}
+
+/* Custom scrollbar for Webkit browsers */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--gem-scrollbar-thumb);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--gem-scrollbar-thumb-hover);
+}
+
+/* Standard scrollbar styles for Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gem-scrollbar-thumb) transparent;
+}
+
+/* Hide scrollbar for Epub iframe internal */
+iframe::-webkit-scrollbar {
+  display: none;
+}
