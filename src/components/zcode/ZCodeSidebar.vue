@@ -1,20 +1,15 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { useBookStore } from '../../stores/bookStore';
 import {
-  Search,
-  Plus,
-  Sparkles,
-  ChevronDown,
-  X,
-  Terminal,
-  FileText,
-  Settings,
-  HelpCircle,
-  ChevronRight,
   Folder,
-  FolderOpen,
-  FileCode
+  Layers3,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  Wand2
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -28,228 +23,122 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['select-book', 'open-search', 'toggle-collapsed', 'open-settings']);
+const emit = defineEmits(['select-book', 'new-task', 'open-search', 'toggle-collapsed', 'open-settings']);
 
 const bookStore = useBookStore();
-const expandedProjects = ref({});
 
-// Toggle project expansion
-const toggleProject = (projectName) => {
-  expandedProjects.value[projectName] = !expandedProjects.value[projectName];
-};
-
-// Projects section - group books
-const projects = computed(() => {
-  const projectMap = {};
-  bookStore.books.forEach((book) => {
-    const projName = book.project || 'Default';
-    if (!projectMap[projName]) {
-      projectMap[projName] = [];
-    }
-    projectMap[projName].push(book);
-  });
-  return Object.entries(projectMap).map(([name, books]) => ({
-    name,
-    books,
-    isExpanded: expandedProjects.value[name] !== false
+const recentTasks = computed(() => {
+  const books = bookStore.books.map((book, index) => ({
+    id: book.id,
+    title: book.fakeTitle || book.title || `Reading Task ${index + 1}`,
+    time: index === 0 ? '23分' : '1小时',
+    active: book.id === props.currentBookId
   }));
+
+  if (books.length > 0) return books;
+
+  return [
+    { id: 'placeholder-1', title: 'Repository Detail Page AI Tools Integration', time: '23分', active: true },
+    { id: 'placeholder-2', title: '文件库AI工具功能开发', time: '1小时', active: false },
+    { id: 'placeholder-3', title: 'Request Entity Too Large Error Fix', time: '1小时', active: false }
+  ];
 });
 
-// Book list items
-const bookListItems = computed(() => {
-  return bookStore.books.map(book => {
-    const isActive = book.id === props.currentBookId;
-    return {
-      id: book.id,
-      title: book.fakeTitle,
-      isActive
-    };
-  });
-});
-
-const handleSelectBook = (bookId) => {
-  emit('select-book', bookId);
-};
-
-const handleToggleCollapsed = () => {
-  emit('toggle-collapsed');
-};
-
-const openSearch = () => {
-  emit('open-search');
-};
-
-const openFontSettings = () => {
-  emit('open-settings', 'font');
-};
-
-const openReadingSettings = () => {
-  emit('open-settings', 'reading');
+const selectTask = (task) => {
+  if (task.id.startsWith('placeholder')) return;
+  emit('select-book', task.id);
 };
 </script>
 
 <template>
-  <aside class="zcode-sidebar flex flex-col h-full bg-[var(--zc-sidebar)] transition-all duration-200" :class="{ 'w-0': collapsed }">
-    <!-- Explorer Header -->
-    <div class="flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--zc-text-dim)]">
+  <aside class="zcode-sidebar" :class="{ collapsed }">
+    <div class="zcode-sidebar-header">
       <span>Explorer</span>
-      <div class="flex items-center space-x-1">
-        <button class="zcode-btn !p-1" title="New File" @click="$emit('new-task')">
-          <Plus :size="16" />
-        </button>
-        <button class="zcode-btn !p-1" title="Collapse All">
-          <ChevronDown :size="16" />
-        </button>
-      </div>
+      <button class="zcode-mini-btn" title="More">
+        <MoreHorizontal :size="14" />
+      </button>
     </div>
 
-    <!-- Projects Tree -->
-    <div class="flex-1 overflow-y-auto zcode-scroll">
-      <!-- GEMINIREADER Section -->
-      <div class="zcode-sidebar-section">
-        <div class="zcode-sidebar-section-label flex items-center cursor-pointer" @click="toggleProject('GEMINIREADER')">
-          <ChevronDown :size="12" class="mr-1 transition-transform" :class="{ 'rotate-0': expandedProjects['GEMINIREADER'] !== false, '-rotate-90': expandedProjects['GEMINIREADER'] === false }" />
-          <span>GEMINIREADER</span>
-        </div>
-
-        <div v-show="expandedProjects['GEMINIREADER'] !== false" class="mt-1">
-          <!-- node_modules -->
-          <div class="zcode-sidebar-item pl-6">
-            <ChevronRight :size="12" class="mr-1" />
-            <Folder :size="14" class="mr-2 text-[var(--zc-success)]" />
-            <span>node_modules</span>
-          </div>
-
-          <!-- src folder -->
-          <div class="mt-1">
-            <div class="zcode-sidebar-item pl-6" @click="toggleProject('src')">
-              <ChevronDown :size="12" class="mr-1 transition-transform" />
-              <FolderOpen :size="14" class="mr-2 text-[var(--zc-success)]" />
-              <span>src</span>
-            </div>
-
-            <div v-show="expandedProjects['src'] !== false" class="mt-1">
-              <!-- Books -->
-              <div class="zcode-sidebar-item pl-10">
-                <ChevronRight :size="12" class="mr-1" />
-                <Folder :size="14" class="mr-2 text-[var(--zc-success)]" />
-                <span>books</span>
-              </div>
-
-              <!-- Book items -->
-              <div v-if="bookStore.books.length > 0" class="mt-1">
-                <button
-                  v-for="item in bookListItems"
-                  :key="item.id"
-                  class="zcode-sidebar-item pl-14"
-                  :class="{ active: item.isActive }"
-                  @click="handleSelectBook(item.id)"
-                >
-                  <FileCode :size="14" class="mr-2 text-[var(--zc-info)]" />
-                  <span class="truncate">{{ item.title }}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Other files -->
-          <div class="zcode-sidebar-item pl-6 mt-1">
-            <FileText :size="14" class="mr-2 text-[var(--zc-text-muted)]" />
-            <span>package.json</span>
-          </div>
-          <div class="zcode-sidebar-item pl-6">
-            <FileText :size="14" class="mr-2 text-[var(--zc-text-muted)]" />
-            <span>vite.config.js</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Outline Section -->
-      <div class="zcode-sidebar-section mt-2">
-        <div class="zcode-sidebar-section-label flex items-center cursor-pointer">
-          <ChevronDown :size="12" class="mr-1" />
-          <span>OUTLINE</span>
-        </div>
-        <div class="px-4 py-2 text-xs text-[var(--zc-text-dim)]">
-          No symbols found in this file.
-        </div>
-      </div>
-
-      <!-- Timeline Section -->
-      <div class="zcode-sidebar-section mt-2">
-        <div class="zcode-sidebar-section-label flex items-center cursor-pointer">
-          <ChevronRight :size="12" class="mr-1" />
-          <span>TIMELINE</span>
-        </div>
-      </div>
+    <div class="zcode-sidebar-top">
+      <button class="zcode-sidebar-action" @click="$emit('new-task')">
+        <Plus :size="16" />
+        <span>新建任务</span>
+        <kbd>Ctrl+N</kbd>
+      </button>
+      <button class="zcode-sidebar-action" @click="$emit('open-search')">
+        <Search :size="16" />
+        <span>搜索</span>
+        <kbd>Ctrl+K</kbd>
+      </button>
+      <button class="zcode-sidebar-action" @click="$emit('open-settings', 'font')">
+        <Wand2 :size="16" />
+        <span>技能</span>
+      </button>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="border-t border-[var(--zc-border-soft)] p-2">
-      <div class="flex items-center space-x-1">
-        <button class="zcode-btn flex-1 justify-start text-xs" @click="openSearch">
-          <Search :size="14" class="mr-2" />
-          <span class="text-[var(--zc-text-muted)]">Search (Ctrl+P)</span>
+    <div class="zcode-sidebar-switcher">
+      <button class="zcode-chip muted">
+        <span>#</span>
+        <span>分组</span>
+      </button>
+      <button class="zcode-chip active">
+        <Folder :size="14" />
+        <span>项目</span>
+      </button>
+      <button class="zcode-mini-btn" title="Collapse" @click="$emit('toggle-collapsed')">
+        <Layers3 :size="14" />
+      </button>
+    </div>
+
+    <div class="zcode-project-list zcode-scroll">
+      <section class="zcode-project-block">
+        <div class="zcode-project-name">
+          <Folder :size="15" />
+          <span>GeminiReder</span>
+        </div>
+        <div class="zcode-empty-text">暂无任务</div>
+      </section>
+
+      <section class="zcode-project-block">
+        <div class="zcode-project-name">
+          <Folder :size="15" />
+          <span>NoteWeb</span>
+        </div>
+
+        <button
+          v-for="task in recentTasks"
+          :key="task.id"
+          class="zcode-task-item"
+          :class="{ active: task.active }"
+          @click="selectTask(task)"
+        >
+          <Sparkles v-if="task.active" :size="14" class="zcode-task-spinner" />
+          <span v-else class="zcode-task-dot"></span>
+          <span class="zcode-task-title">{{ task.title }}</span>
+          <span class="zcode-task-time">{{ task.time }}</span>
         </button>
-      </div>
+
+        <button class="zcode-more-link">显示更多</button>
+      </section>
+
+      <section class="zcode-project-block">
+        <div class="zcode-project-name">
+          <Folder :size="15" />
+          <span>ZCodeProject</span>
+        </div>
+        <div class="zcode-empty-text">暂无任务</div>
+      </section>
+    </div>
+
+    <div class="zcode-sidebar-user">
+      <div class="zcode-avatar">不</div>
+      <div class="zcode-user-name">不吃番茄</div>
+      <button class="zcode-mini-btn" title="Device">
+        <span class="zcode-device-icon"></span>
+      </button>
+      <button class="zcode-mini-btn" title="Settings" @click="$emit('open-settings', 'font')">
+        <Settings :size="15" />
+      </button>
     </div>
   </aside>
 </template>
-
-<style scoped>
-.zcode-sidebar {
-  width: var(--zc-sidebar-w, 300px);
-  min-width: var(--zc-sidebar-w, 300px);
-}
-
-.zcode-sidebar.w-0 {
-  width: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.zcode-sidebar-section {
-  user-select: none;
-}
-
-.zcode-sidebar-section-label {
-  display: flex;
-  align-items: center;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--zc-text-dim);
-  cursor: pointer;
-}
-
-.zcode-sidebar-section-label:hover {
-  color: var(--zc-text-muted);
-}
-
-.zcode-sidebar-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 2px 8px 2px 20px;
-  color: var(--zc-text-muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  font-size: 13px;
-  height: 22px;
-  transition: background-color 0.1s ease;
-}
-
-.zcode-sidebar-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--zc-text);
-}
-
-.zcode-sidebar-item.active {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: var(--zc-text);
-}
-</style>

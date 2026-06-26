@@ -1,11 +1,11 @@
 <script setup>
 import { ref } from 'vue';
-import { Plus, Sparkles, X } from 'lucide-vue-next';
+import { Bot, ChevronDown, Circle, Plus, Send, SlidersHorizontal } from 'lucide-vue-next';
 
 const props = defineProps({
   placeholder: {
     type: String,
-    default: 'Type a command or search...'
+    default: '继续输入以排队后续修改'
   },
   isArticleMode: {
     type: Boolean,
@@ -13,7 +13,7 @@ const props = defineProps({
   },
   modelName: {
     type: String,
-    default: 'CodeReader'
+    default: 'glm-5.2'
   }
 });
 
@@ -37,66 +37,45 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div class="zcode-terminal-panel">
-    <!-- Terminal header -->
-    <div class="zcode-terminal-header flex items-center justify-between px-4 py-2 border-b border-[var(--zc-border-soft)] bg-[var(--zc-tab-bg)]">
-      <div class="flex items-center space-x-2">
-        <span class="text-xs font-semibold uppercase tracking-wider text-[var(--zc-text-muted)]">Terminal</span>
-      </div>
-      <div class="flex items-center space-x-1">
-        <button class="zcode-btn !p-1" title="New Terminal">
-          <Plus :size="14" />
-        </button>
-        <button class="zcode-btn !p-1" title="Split Terminal">
-          <Sparkles :size="14" />
-        </button>
-        <button class="zcode-btn !p-1" title="Kill Terminal">
-          <X :size="14" />
-        </button>
-      </div>
-    </div>
+  <div class="zcode-command-wrap">
+    <div class="zcode-command-box">
+      <textarea
+        v-model="inputValue"
+        :placeholder="placeholder"
+        class="zcode-command-input"
+        rows="2"
+        @keydown="handleInputKeydown"
+      ></textarea>
 
-    <!-- Terminal content -->
-    <div class="zcode-terminal-content p-2 bg-[var(--zc-bg)] font-mono text-sm h-24 overflow-y-auto zcode-scroll">
-      <div class="text-[var(--zc-text-muted)]">
-        <span class="text-green-400">→</span> Ready to read. Press arrow keys or click to navigate.
-      </div>
-      <div v-if="inputValue" class="text-[var(--zc-text)]">
-        <span class="text-green-400">→</span> {{ inputValue }}
+      <div class="zcode-command-footer">
+        <div class="zcode-command-left">
+          <button class="zcode-command-btn" title="Add context" @click="$emit('toggle-article-mode')">
+            <Plus :size="17" />
+          </button>
+          <button class="zcode-command-mode" :class="{ active: isArticleMode }" @click="$emit('toggle-article-mode')">
+            <Bot :size="15" />
+            <span>自动编辑</span>
+            <ChevronDown :size="13" />
+          </button>
+        </div>
+
+        <div class="zcode-command-right">
+          <Circle :size="16" class="zcode-loader-dot" />
+          <button class="zcode-command-mode">
+            <span>{{ modelName }}</span>
+            <ChevronDown :size="13" />
+          </button>
+          <button class="zcode-command-mode">
+            <SlidersHorizontal :size="15" />
+            <span>最高</span>
+            <ChevronDown :size="13" />
+          </button>
+          <button class="zcode-send-btn" :class="{ ready: inputValue.trim() }" @click="handleSubmit" title="Send">
+            <Send v-if="inputValue.trim()" :size="15" />
+            <span v-else></span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.zcode-terminal-panel {
-  height: 120px;
-  background-color: var(--zc-bg);
-  border-top: 1px solid var(--zc-border);
-}
-
-.zcode-terminal-header {
-  height: 35px;
-}
-
-.zcode-terminal-content {
-  height: calc(100% - 35px);
-}
-
-.zcode-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--zc-border) transparent;
-}
-
-.zcode-scroll::-webkit-scrollbar {
-  width: 10px;
-}
-
-.zcode-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.zcode-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(121, 121, 121, 0.4);
-}
-</style>

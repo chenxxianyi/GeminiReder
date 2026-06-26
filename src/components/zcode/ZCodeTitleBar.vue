@@ -2,16 +2,14 @@
 import { computed } from 'vue';
 import { useBookStore } from '../../stores/bookStore';
 import {
-  ChevronLeft,
-  ChevronRight,
   ArrowLeft,
-  Menu,
+  ArrowRight,
+  Folder,
+  GitBranch,
   MoreHorizontal,
-  FileText,
-  Terminal,
-  LayoutGrid,
-  Settings,
-  LayoutDashboard,
+  PanelLeft,
+  PanelRight,
+  TerminalSquare,
   ChevronDown
 } from 'lucide-vue-next';
 
@@ -27,99 +25,71 @@ const props = defineProps({
   branchName: {
     type: String,
     default: 'main'
+  },
+  commandOpen: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(['back', 'forward', 'toggle-sidebar', 'toggle-panel', 'open-toc', 'open-settings', 'switch-to-gemini']);
+const emit = defineEmits(['back', 'forward', 'toggle-sidebar', 'toggle-command', 'open-settings', 'switch-to-gemini']);
 
 const bookStore = useBookStore();
 
 const currentBookTitle = computed(() => {
-  if (!bookStore.currentBookId) return 'No Task Selected';
+  if (!bookStore.currentBookId) return props.title;
   const book = bookStore.books.find(b => b.id === bookStore.currentBookId);
-  return book?.fakeTitle || book?.title || 'Unknown Task';
+  return book?.fakeTitle || book?.title || props.title;
 });
-
-const handleBack = () => {
-  emit('back');
-};
-
-const handleForward = () => {
-  emit('forward');
-};
-
-const handleToggleSidebar = () => {
-  emit('toggle-sidebar');
-};
-
-const handleSwitchToGemini = () => {
-  emit('switch-to-gemini');
-};
-
-const handleOpenTOC = () => {
-  emit('open-toc');
-};
-
-const handleOpenSettings = () => {
-  emit('open-settings');
-};
 </script>
 
 <template>
   <header class="zcode-title-bar">
-    <!-- Left: Menu items -->
-    <div class="flex items-center h-full">
-      <div class="zcode-title-bar-menu">
-        <span class="font-semibold text-[var(--zc-accent)] mr-4">Z</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>File</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>Edit</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>Selection</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>View</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>Go</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>Run</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>Terminal</span>
-      </div>
-      <div class="zcode-title-bar-menu">
-        <span>Help</span>
-      </div>
+    <div class="zcode-window-brand">
+      <div class="zcode-logo">Z</div>
+      <button class="zcode-nav-btn" title="Back" @click="$emit('back')">
+        <ArrowLeft :size="16" />
+      </button>
+      <button class="zcode-nav-btn" title="Forward" @click="$emit('forward')">
+        <ArrowRight :size="16" />
+      </button>
     </div>
 
-    <!-- Center: Title -->
-    <div class="flex-1 flex items-center justify-center">
-      <span class="text-[var(--zc-text-muted)] text-sm">{{ currentBookTitle }} — ZCode</span>
+    <div class="zcode-title-main">
+      <div class="zcode-title-text">{{ currentBookTitle }}</div>
+
+      <button class="zcode-pill zcode-project-pill" title="Project" @click="$emit('switch-to-gemini')">
+        <Folder :size="14" />
+        <span>{{ projectName }}</span>
+      </button>
+
+      <button class="zcode-pill" title="Branch">
+        <GitBranch :size="14" />
+        <span>{{ branchName }}</span>
+        <ChevronDown :size="13" />
+      </button>
+
+      <button class="zcode-icon-only" title="More">
+        <MoreHorizontal :size="18" />
+      </button>
     </div>
 
-    <!-- Right: Window controls -->
-    <div class="flex items-center h-full">
-      <button class="zcode-title-bar-menu !h-full !px-3">
-        <span class="w-3 h-0.5 bg-[var(--zc-text-muted)] block"></span>
+    <div class="zcode-title-actions">
+      <button class="zcode-title-tool active" title="Explorer" @click="$emit('toggle-sidebar')">
+        <PanelLeft :size="16" />
       </button>
-      <button class="zcode-title-bar-menu !h-full !px-3">
-        <span class="w-3 h-3 border border-[var(--zc-text-muted)] block"></span>
+      <button class="zcode-title-tool" title="Command" :class="{ active: commandOpen }" @click="$emit('toggle-command')">
+        <TerminalSquare :size="16" />
       </button>
-      <button class="zcode-title-bar-menu !h-full !px-3 hover:!bg-[var(--zc-danger)] hover:!text-white">
-        <span class="text-lg leading-none">×</span>
+      <button class="zcode-title-tool" title="Reading Settings" @click="$emit('open-settings')">
+        <PanelRight :size="16" />
       </button>
+      <button class="zcode-title-tool" title="Menu">
+        <ChevronDown :size="18" />
+      </button>
+      <div class="zcode-window-control min"></div>
+      <div class="zcode-window-control max"></div>
+      <div class="zcode-window-control close"></div>
     </div>
   </header>
 </template>
-
-<style scoped>
-.zcode-title-bar {
-  user-select: none;
-}
-</style>

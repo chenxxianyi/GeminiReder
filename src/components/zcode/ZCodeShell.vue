@@ -24,6 +24,7 @@ const {
   initReader,
   destroyReader,
   applyFontTheme,
+  handleResize,
   nextSection,
   prevSection,
   jumpToCfi,
@@ -41,6 +42,7 @@ const showFontSettings = ref(false);
 const showBookmarks = ref(false);
 const showBossMode = ref(false);
 const showArticleCanvas = ref(false);
+const showCommandBox = ref(false);
 const activeActivityItem = ref('explorer');
 
 // EPUB Reader ref
@@ -139,6 +141,12 @@ const handleSwitchToGemini = () => {
 // Handle open TOC
 const handleOpenTOC = () => {
   showTOC.value = true;
+};
+
+const handleToggleCommandBox = async () => {
+  showCommandBox.value = !showCommandBox.value;
+  await nextTick();
+  handleResize();
 };
 
 // Handle open settings
@@ -285,7 +293,9 @@ watch(() => epubReaderRef.value?.readerArea, (newVal) => {
         @back="prevSection"
         @forward="nextSection"
         @toggle-sidebar="handleToggleSidebar"
+        :command-open="showCommandBox"
         @open-toc="handleOpenTOC"
+        @toggle-command="handleToggleCommandBox"
         @open-settings="handleOpenSettings"
         @switch-to-gemini="handleSwitchToGemini"
       />
@@ -312,10 +322,17 @@ watch(() => epubReaderRef.value?.readerArea, (newVal) => {
         <EpubReader
           ref="epubReaderRef"
           :book-id="bookStore.currentBookId"
-          min-height="calc(100vh - 200px)"
-          max-height="calc(100vh - 200px)"
+          min-height="100%"
+          max-height="100%"
         />
       </ZCodeReaderSurface>
+
+      <ZCodeCommandBox
+        v-if="showCommandBox"
+        :is-article-mode="showArticleCanvas"
+        @submit="handleCommandSubmit"
+        @toggle-article-mode="handleToggleArticleCanvas"
+      />
 
       <!-- Status bar -->
       <div class="zcode-status-bar">
