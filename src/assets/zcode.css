@@ -19,9 +19,11 @@
   --zc-success: #75b863;
   --zc-accent: #bcbcbc;
   --zc-sidebar-w: clamp(216px, 22.1vw, 424px);
-  --zc-titlebar-h: clamp(44px, 3.65vw, 70px);
-  --zc-commandbox-w: clamp(520px, 53.34vw, 1024px);
-  --zc-commandbox-h: clamp(118px, 12.1vw, 232px);
+  --zc-titlebar-h: clamp(54px, 4vw, 77px);
+  --zc-content-w: min(1368px, calc(100vw - var(--zc-sidebar-w) - 150px));
+  --zc-thread-w: min(1368px, calc(100vw - var(--zc-sidebar-w) - 120px));
+  --zc-commandbox-w: clamp(720px, 53.34vw, 1024px);
+  --zc-commandbox-h: clamp(176px, 13.9vw, 266px);
 }
 
 .zcode-app,
@@ -530,18 +532,84 @@ button {
 .zcode-title-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   height: var(--zc-titlebar-h);
   min-height: var(--zc-titlebar-h);
-  padding: 0 28px 0 18px;
-  background: transparent;
+  padding: 0 31px 0 24px;
+  background: #111111;
+  border-bottom: 1px solid #242424;
   user-select: none;
   -webkit-app-region: drag;
 }
 
-.zcode-title-spacer {
+.zcode-title-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.zcode-title-name {
+  min-width: 84px;
+  max-width: min(240px, 24vw);
+  overflow: hidden;
+  color: #f0f0f0;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zcode-title-pill,
+.zcode-title-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  color: #d2d2d2;
+  background: #272727;
+  border: 1px solid #353535;
+  border-radius: 15px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.zcode-title-pill {
+  gap: 8px;
+  max-width: 210px;
+  padding: 0 14px;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.zcode-title-pill span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zcode-title-more {
+  width: 42px;
+}
+
+.zcode-title-sidebar-toggle {
+  flex: 0 0 auto;
+  color: #cfcfcf;
+  background: #242424;
+  border: 1px solid #363636;
+}
+
+.zcode-title-sidebar-toggle:hover {
+  color: #f2f2f2;
+  background: #2d2d2d;
+}
+
+.zcode-title-spacer {
+  min-width: 0;
+  flex: 0 1 250px;
   height: 100%;
 }
 
@@ -554,15 +622,23 @@ button {
 
 .zcode-title-tool,
 .zcode-window-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
 }
 
 .zcode-title-tool svg,
 .zcode-window-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+}
+
+.zcode-title-tool-raised {
+  width: 79px;
+  gap: 7px;
+  color: #e0e0e0;
+  background: #292929;
+  border: 1px solid #3a3a3a;
 }
 
 .zcode-window-btn {
@@ -577,6 +653,245 @@ button {
 .zcode-window-btn-close:hover:not(:disabled) {
   color: #ffffff;
   background: #c42b1c;
+}
+
+/* Terminal-style progress checkpoints */
+.zcode-progress-panel {
+  position: fixed;
+  top: calc(var(--zc-titlebar-h) + 12px);
+  right: 132px;
+  z-index: 42;
+  display: flex;
+  width: clamp(360px, 28vw, 492px);
+  max-height: min(650px, calc(100vh - var(--zc-titlebar-h) - 44px));
+  flex-direction: column;
+  overflow: hidden;
+  color: #d4d4d4;
+  background: #151515;
+  border: 1px solid #383838;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.46);
+}
+
+.zcode-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 12px 0 14px;
+  background: #1b1b1b;
+  border-bottom: 1px solid #303030;
+}
+
+.zcode-progress-head-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  color: #cfcfcf;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.zcode-progress-head-title svg {
+  color: #9d9d9d;
+}
+
+.zcode-progress-muted {
+  max-width: 180px;
+  overflow: hidden;
+  color: #757575;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zcode-progress-icon-btn,
+.zcode-progress-record-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8f8f8f;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.zcode-progress-icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+.zcode-progress-icon-btn:hover,
+.zcode-progress-record-remove:hover {
+  color: #eeeeee;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.zcode-progress-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 14px;
+  background: #111111;
+  border-bottom: 1px solid #262626;
+}
+
+.zcode-progress-capture {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 11px;
+  color: #d7d7d7;
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.zcode-progress-capture:hover:not(:disabled) {
+  color: #ffffff;
+  background: #303030;
+}
+
+.zcode-progress-capture:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.zcode-progress-branch {
+  color: #8f8f8f;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.zcode-progress-body {
+  min-height: 180px;
+  overflow-y: auto;
+  padding: 14px;
+  font-family: "Fira Code", "JetBrains Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.zcode-progress-command,
+.zcode-progress-status,
+.zcode-progress-empty {
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+  color: #a9a9a9;
+}
+
+.zcode-progress-status {
+  margin-top: 8px;
+  color: #c9c9c9;
+}
+
+.zcode-progress-empty {
+  margin-top: 18px;
+  color: #777777;
+}
+
+.zcode-progress-prompt {
+  flex: 0 0 auto;
+  color: #d6b05f;
+}
+
+.zcode-progress-records {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.zcode-progress-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 6px 7px;
+  background: #1b1b1b;
+  border: 1px solid #2b2b2b;
+  border-radius: 8px;
+}
+
+.zcode-progress-record:hover {
+  background: #202020;
+  border-color: #3a3a3a;
+}
+
+.zcode-progress-record-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: #d0d0d0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.zcode-progress-record-main svg {
+  flex: 0 0 auto;
+  color: #d6b05f;
+}
+
+.zcode-progress-record-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.zcode-progress-record-label,
+.zcode-progress-record-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zcode-progress-record-label {
+  color: #d9d9d9;
+  font-weight: 700;
+}
+
+.zcode-progress-record-meta {
+  color: #777777;
+  font-size: 11px;
+}
+
+.zcode-progress-record-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  opacity: 0.48;
+}
+
+.zcode-progress-record:hover .zcode-progress-record-remove {
+  opacity: 1;
+}
+
+.zcode-terminal-pop-enter-active,
+.zcode-terminal-pop-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.zcode-terminal-pop-enter-from,
+.zcode-terminal-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
 }
 
 /* Reader surface */
@@ -665,18 +980,137 @@ button {
   transform: skewX(-31deg);
 }
 
+.zcode-reader-workspace {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+  padding: 34px clamp(46px, 6vw, 116px) 224px;
+}
+
+.zcode-reader-thread {
+  position: relative;
+  width: var(--zc-thread-w);
+  max-width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.zcode-reader-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  color: #858585;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.zcode-reader-meta svg {
+  width: 15px;
+  height: 15px;
+  color: #777777;
+}
+
+.zcode-reader-divider {
+  width: 100%;
+  height: 1px;
+  margin: 12px 0 18px;
+  background: #2a2a2a;
+}
+
+.zcode-reader-book-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: #d4d4d4;
+}
+
+.zcode-reader-book-frame > .epub-reader-container {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.zcode-reader-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  margin-top: 10px;
+  padding-bottom: 0;
+}
+
+.zcode-reader-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: #818181;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.zcode-reader-action-btn:hover,
+.zcode-reader-action-btn.active {
+  color: #e3e3e3;
+  background: rgba(255, 255, 255, 0.072);
+}
+
+.zcode-reader-action-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 .zcode-reader-surface .epub-reader-container,
 .zcode-reader-surface .epub-render-area {
   height: 100%;
+  width: 100%;
   min-height: 0 !important;
   max-height: none !important;
   background: var(--zc-editor-bg);
+}
+
+.zcode-reader-surface .epub-reader-container {
+  padding: 0;
+}
+
+.zcode-reader-surface .epub-render-area {
+  width: min(100%, var(--zc-content-w)) !important;
+  max-width: 100%;
+  margin: 0;
 }
 
 .zcode-reader-surface .epub-container,
 .zcode-reader-surface .epub-view,
 .zcode-reader-surface .epub-container iframe {
   background: var(--zc-editor-bg) !important;
+}
+
+.zcode-reader-surface .epub-container {
+  padding-top: 0;
+  overflow-y: auto !important;
+}
+
+.zcode-reader-surface .epub-view {
+  min-height: 100% !important;
+}
+
+.zcode-reader-surface .epub-container iframe {
+  min-height: 100% !important;
+  display: block !important;
 }
 
 /* Shared buttons */
@@ -717,13 +1151,13 @@ button {
   z-index: 4;
   display: flex;
   justify-content: center;
-  padding: 0 56px;
+  padding: 0 clamp(48px, 6vw, 116px);
   pointer-events: none;
 }
 
 .zcode-command-wrap.is-reader-active {
   top: auto;
-  bottom: 34px;
+  bottom: 56px;
 }
 
 .zcode-command-box {
@@ -740,7 +1174,24 @@ button {
 }
 
 .zcode-command-wrap.is-reader-active .zcode-command-box {
-  height: 168px;
+  width: var(--zc-commandbox-w);
+  height: var(--zc-commandbox-h);
+  background: #2f2f2f;
+  border-color: #464646;
+  border-radius: 24px;
+}
+
+.zcode-command-wrap.is-reader-active .zcode-command-context {
+  display: flex;
+}
+
+.zcode-command-wrap.is-reader-active .zcode-command-input {
+  padding: 22px 20px 8px;
+  font-size: 18px;
+}
+
+.zcode-command-wrap.is-reader-active .zcode-command-footer {
+  padding: 4px 20px 18px;
 }
 
 .zcode-command-context {
@@ -1048,7 +1499,38 @@ button {
   }
 
   .zcode-title-bar {
-    padding: 0 18px 0 11px;
+    padding: 0 18px 0 14px;
+  }
+
+  .zcode-title-left {
+    gap: 9px;
+  }
+
+  .zcode-title-sidebar-toggle {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+  }
+
+  .zcode-title-name {
+    min-width: 54px;
+    max-width: 135px;
+    font-size: 15px;
+  }
+
+  .zcode-title-pill {
+    gap: 5px;
+    height: 28px;
+    max-width: 128px;
+    padding: 0 9px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .zcode-title-more {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
   }
 
   .zcode-title-actions {
@@ -1060,6 +1542,11 @@ button {
     width: 20px;
     height: 20px;
     border-radius: 5px;
+  }
+
+  .zcode-title-tool-raised {
+    width: 49px;
+    gap: 4px;
   }
 
   .zcode-title-tool svg,
@@ -1081,6 +1568,27 @@ button {
     top: 94px;
     transform: translateX(-50%) scale(0.625);
     transform-origin: top center;
+  }
+
+  .zcode-reader-surface .epub-reader-container {
+    padding: 0;
+  }
+
+  .zcode-reader-surface .epub-container {
+    padding-top: 0;
+  }
+
+  .zcode-reader-workspace {
+    padding: 26px 35px 184px;
+  }
+
+  .zcode-reader-divider {
+    margin: 10px 0 14px;
+  }
+
+  .zcode-reader-book-frame {
+    height: 100%;
+    min-height: 0;
   }
 
   .zcode-command-wrap {
@@ -1156,7 +1664,9 @@ button {
 @media (max-width: 1180px) {
   :root {
     --zc-sidebar-w: clamp(216px, 22.1vw, 261px);
-    --zc-commandbox-w: clamp(520px, 53.34vw, 630px);
+    --zc-content-w: min(705px, calc(100vw - var(--zc-sidebar-w) - 120px));
+    --zc-thread-w: min(735px, calc(100vw - var(--zc-sidebar-w) - 80px));
+    --zc-commandbox-w: min(735px, calc(100vw - var(--zc-sidebar-w) - 80px));
     --zc-commandbox-h: clamp(118px, 12.1vw, 143px);
   }
 
@@ -1176,7 +1686,12 @@ button {
     height: var(--zc-commandbox-h);
   }
 
-  .zcode-command-input {
+  .zcode-command-wrap.is-reader-active .zcode-command-box {
+    height: 126px;
+  }
+
+  .zcode-command-input,
+  .zcode-command-wrap.is-reader-active .zcode-command-input {
     padding-top: 16px;
   }
 }
@@ -1201,6 +1716,7 @@ button {
 @media (max-width: 780px) {
   :root {
     --zc-sidebar-w: 0px;
+    --zc-thread-w: 100%;
     --zc-commandbox-w: 100%;
   }
 
@@ -1220,6 +1736,18 @@ button {
 
   .zcode-title-actions {
     gap: 8px;
+  }
+
+  .zcode-title-name {
+    max-width: 32vw;
+  }
+
+  .zcode-title-pill,
+  .zcode-title-more,
+  .zcode-title-tool-raised,
+  .zcode-title-tool:nth-child(2),
+  .zcode-title-tool:nth-child(3) {
+    display: none;
   }
 
   .zcode-empty-home {
@@ -1242,10 +1770,35 @@ button {
     padding: 0 16px;
   }
 
+  .zcode-reader-surface .epub-reader-container {
+    padding: 0;
+  }
+
+  .zcode-reader-surface .epub-render-area {
+    width: 100% !important;
+  }
+
   .zcode-command-box,
   .zcode-command-wrap.is-reader-active .zcode-command-box {
     width: 100%;
     height: 148px;
+  }
+
+  .zcode-reader-workspace {
+    padding: 24px 18px 188px;
+  }
+
+  .zcode-reader-meta {
+    font-size: 13px;
+  }
+
+  .zcode-reader-divider {
+    margin: 8px 0 14px;
+  }
+
+  .zcode-reader-book-frame {
+    height: 100%;
+    min-height: 0;
   }
 
   .zcode-command-right .zcode-command-mode {

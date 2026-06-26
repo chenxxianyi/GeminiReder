@@ -140,6 +140,7 @@ const TocItem = defineComponent({
             style: { paddingLeft },
             onClick: () => {
               if (hasChildren) {
+                emit('navigate', props.item);
                 emit('toggle');
                 return;
               }

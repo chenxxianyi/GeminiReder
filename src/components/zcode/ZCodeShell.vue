@@ -6,11 +6,11 @@ import { useEpubReader } from '../../composables/useEpubReader';
 import ZCodeTitleBar from './ZCodeTitleBar.vue';
 import ZCodeSidebar from './ZCodeSidebar.vue';
 import ZCodeCommandBox from './ZCodeCommandBox.vue';
+import ZCodeProgressPanel from './ZCodeProgressPanel.vue';
 import ZCodeReaderSurface from './ZCodeReaderSurface.vue';
 import EpubReader from '../reader/EpubReader.vue';
 import TableOfContents from '../TableOfContents.vue';
 import FontSettings from '../FontSettings.vue';
-import BookmarkPanel from '../BookmarkPanel.vue';
 
 const bookStore = useBookStore();
 const ZLIB_URL = 'https://z-library.sk/';
@@ -32,11 +32,13 @@ const {
 const sidebarCollapsed = ref(false);
 const showTOC = ref(false);
 const showFontSettings = ref(false);
-const showBookmarks = ref(false);
+const showProgressPanel = ref(false);
+const progressStatus = ref('');
 const showBossMode = ref(false);
 const showArticleCanvas = ref(false);
 const showCommandBox = ref(true);
 const epubReaderRef = ref(null);
+let readerInitTimer = null;
 
 const currentBook = computed(() => {
   if (!bookStore.currentBookId) return null;
@@ -82,11 +84,33 @@ const syncReaderArea = () => {
   }
 };
 
+const scheduleReaderInit = () => {
+  if (!bookStore.currentBookId) return;
+  if (readerInitTimer) {
+    window.clearTimeout(readerInitTimer);
+  }
+  readerInitTimer = window.setTimeout(async () => {
+    readerInitTimer = null;
+    await reinitReaderIfNeeded();
+  }, 80);
+};
+
 const reinitReaderIfNeeded = async () => {
   if (!bookStore.currentBookId) return;
   await nextTick();
   syncReaderArea();
   await initReader();
+};
+
+const handleReaderReady = async () => {
+  syncReaderArea();
+  scheduleReaderInit();
+};
+
+const handleRefreshReader = async () => {
+  if (!bookStore.currentBookId) return;
+  saveProgress();
+  await reinitReaderIfNeeded();
 };
 
 const handleSelectBook = async (bookId) => {
@@ -152,9 +176,11 @@ const handleOpenTOC = () => {
   showTOC.value = true;
 };
 
-const handleOpenBookmarks = () => {
-  if (!bookStore.currentBookId) return;
-  showBookmarks.value = true;
+const handleOpenProgressPanel = () => {
+  showProgressPanel.value = !showProgressPanel.value;
+  if (!bookStore.currentBookId) {
+    progressStatus.value = 'No active workspace file.';
+  }
 };
 
 const handleToggleCommandBox = () => {
@@ -183,22 +209,45 @@ const handleOpenZLib = async () => {
   }
 };
 
-const handleAddBookmark = () => {
-  if (!bookStore.currentBookId) return;
-
-  const cfi = getCurrentCfi();
-  if (!cfi) return;
-
-  const label = window.prompt('Pin label', `Pin ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
-  if (label === null) return;
-
-  const nextLabel = label.trim() || `Pin ${new Date().toLocaleDateString()}`;
-  bookStore.addBookmark(bookStore.currentBookId, cfi, nextLabel);
-  showBookmarks.value = true;
+const buildProgressLabel = () => {
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const scope = currentBook.value?.fakeTitle || 'workspace';
+  return `trace: ${scope} @ ${time}`;
 };
 
-const handleJumpToBookmark = (cfi) => {
-  jumpToCfi(cfi);
+const handleAddProgressRecord = () => {
+  if (!bookStore.currentBookId) {
+    progressStatus.value = 'No active workspace file.';
+    showProgressPanel.value = true;
+    return;
+  }
+
+  const cfi = getCurrentCfi();
+  if (!cfi) {
+    progressStatus.value = 'Cursor position is not ready. Try again after the page settles.';
+    showProgressPanel.value = true;
+    return;
+  }
+
+  const record = bookStore.addBookmark(bookStore.currentBookId, cfi, buildProgressLabel());
+  progressStatus.value = record ? `Checkpoint saved: ${record.label}` : 'Checkpoint write failed.';
+  showProgressPanel.value = true;
+};
+
+const handleJumpToProgressRecord = async (cfi) => {
+  if (!cfi) return;
+  progressStatus.value = 'Restoring checkpoint...';
+  showProgressPanel.value = false;
+  await jumpToCfi(cfi);
+  applyFontTheme();
+  progressStatus.value = 'Checkpoint restored.';
+};
+
+const handleRemoveProgressRecord = (recordId) => {
+  if (!bookStore.currentBookId || !recordId) return;
+  bookStore.removeBookmark(bookStore.currentBookId, recordId);
+  progressStatus.value = 'Checkpoint dropped.';
 };
 
 const handleFontApply = () => {
@@ -235,11 +284,11 @@ const handleGlobalKeydown = async (event) => {
   }
 
   if (event.key === 'Escape') {
-    if (showTOC.value || showFontSettings.value || showBookmarks.value) {
+    if (showTOC.value || showFontSettings.value || showProgressPanel.value) {
       event.preventDefault();
       showTOC.value = false;
       showFontSettings.value = false;
-      showBookmarks.value = false;
+      showProgressPanel.value = false;
       return;
     }
   }
@@ -256,7 +305,7 @@ const handleGlobalKeydown = async (event) => {
 
   if (event.ctrlKey && event.key.toLowerCase() === 'd') {
     event.preventDefault();
-    handleAddBookmark();
+    handleAddProgressRecord();
     return;
   }
 
@@ -282,13 +331,17 @@ onMounted(async () => {
   syncReaderArea();
 
   if (bookStore.currentBookId) {
-    await initReader();
+    scheduleReaderInit();
   }
 
   window.addEventListener('keydown', handleGlobalKeydown);
 });
 
 onUnmounted(() => {
+  if (readerInitTimer) {
+    window.clearTimeout(readerInitTimer);
+    readerInitTimer = null;
+  }
   window.removeEventListener('keydown', handleGlobalKeydown);
   destroyReader();
 });
@@ -298,7 +351,7 @@ watch(
   async () => {
     syncReaderArea();
     if (bookStore.currentBookId && readerArea.value && !isLoading.value) {
-      await initReader();
+      scheduleReaderInit();
     }
   }
 );
@@ -325,11 +378,12 @@ watch(
         :project-name="statusProjectLabel"
         branch-name="master"
         :command-open="showCommandBox"
+        :sidebar-collapsed="sidebarCollapsed"
         @back="prevSection"
         @forward="nextSection"
         @toggle-sidebar="handleToggleSidebar"
         @open-toc="handleOpenTOC"
-        @open-bookmarks="handleOpenBookmarks"
+        @open-progress="handleOpenProgressPanel"
         @toggle-command="handleToggleCommandBox"
         @open-settings="handleOpenSettings"
       />
@@ -340,12 +394,15 @@ watch(
           :show-article-canvas="showArticleCanvas"
           @toggle-boss-mode="handleToggleBossMode"
           @toggle-article-canvas="handleToggleArticleCanvas"
+          @refresh-reader="handleRefreshReader"
         >
           <EpubReader
             ref="epubReaderRef"
             :book-id="bookStore.currentBookId"
             min-height="100%"
             max-height="100%"
+            @ready="handleReaderReady"
+            @loaded="handleReaderReady"
           />
         </ZCodeReaderSurface>
 
@@ -353,6 +410,8 @@ watch(
           v-if="showCommandBox"
           :class="{ 'is-reader-active': bookStore.currentBookId }"
           :is-article-mode="showArticleCanvas"
+          :placeholder="bookStore.currentBookId ? '提出后续修改要求' : '向 ZCode 提问，输入 @ 添加文件，/ 使用命令，$ 使用技能，# 关联对话'"
+          model-name="GLM-5.2"
           :project-name="statusProjectLabel"
           branch-name="master"
           @submit="handleCommandSubmit"
@@ -371,12 +430,16 @@ watch(
 
     <FontSettings :show="showFontSettings" @close="showFontSettings = false" @apply="handleFontApply" />
 
-    <BookmarkPanel
-      :show="showBookmarks"
+    <ZCodeProgressPanel
+      :show="showProgressPanel"
       :book-id="bookStore.currentBookId"
-      @close="showBookmarks = false"
-      @jump-to="handleJumpToBookmark"
-      @add-bookmark="handleAddBookmark"
+      :project-name="statusProjectLabel"
+      branch-name="master"
+      :status="progressStatus"
+      @close="showProgressPanel = false"
+      @add-record="handleAddProgressRecord"
+      @jump-to="handleJumpToProgressRecord"
+      @remove-record="handleRemoveProgressRecord"
     />
   </div>
 </template>

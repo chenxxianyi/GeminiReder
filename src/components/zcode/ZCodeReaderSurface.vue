@@ -1,7 +1,14 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useBookStore } from '../../stores/bookStore';
-import { EyeOff } from 'lucide-vue-next';
+import {
+  Copy,
+  EyeOff,
+  Maximize2,
+  RotateCcw,
+  ThumbsDown,
+  ThumbsUp
+} from 'lucide-vue-next';
 
 const props = defineProps({
   showBossMode: {
@@ -14,9 +21,10 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['toggle-boss-mode', 'toggle-article-canvas']);
+const emit = defineEmits(['toggle-boss-mode', 'toggle-article-canvas', 'refresh-reader']);
 
 const bookStore = useBookStore();
+const feedbackState = ref('');
 
 const currentArticleContent = computed(() => {
   if (!bookStore.currentArticleId) return '';
@@ -28,12 +36,48 @@ const currentBook = computed(() => {
   return bookStore.books.find((book) => book.id === bookStore.currentBookId) || null;
 });
 
+const readerLabel = computed(() => {
+  return currentBook.value?.title || currentBook.value?.fakeTitle || 'ZCode 阅读任务';
+});
+
 const handleArticleInput = (event) => {
   if (!bookStore.currentArticleId) return;
   bookStore.updateArticle(bookStore.currentArticleId, {
     content: event.target.innerText
   });
 };
+
+const copyReaderInfo = async () => {
+  const book = currentBook.value;
+  if (!book) return;
+
+  const text = [book.title, book.author].filter(Boolean).join(' - ');
+  try {
+    await navigator.clipboard?.writeText(text || readerLabel.value);
+  } catch (error) {
+    console.warn('[ZCode] Copy reader info failed:', error);
+  }
+};
+
+const toggleFullscreen = async () => {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await document.querySelector('.zcode-reader-surface')?.requestFullscreen();
+  } catch (error) {
+    console.warn('[ZCode] Toggle reader fullscreen failed:', error);
+  }
+};
+
+watch(
+  () => bookStore.currentBookId,
+  () => {
+    feedbackState.value = '';
+  }
+);
 </script>
 
 <template>
@@ -100,8 +144,45 @@ const handleArticleInput = (event) => {
       <h1 class="zcode-greeting">上午好呀，有什么想让我帮忙的吗</h1>
     </div>
 
-    <div v-show="!showBossMode && !showArticleCanvas && bookStore.currentBookId" class="h-full w-full">
-      <slot></slot>
+    <div
+      v-show="!showBossMode && !showArticleCanvas && bookStore.currentBookId"
+      class="zcode-reader-workspace zcode-scroll"
+    >
+      <section class="zcode-reader-thread" :aria-label="readerLabel">
+        <div class="zcode-reader-book-frame">
+          <slot></slot>
+        </div>
+
+        <div class="zcode-reader-actions" aria-label="阅读操作">
+          <button class="zcode-reader-action-btn" title="复制书籍信息" @click="copyReaderInfo">
+            <Copy :size="18" :stroke-width="1.8" />
+          </button>
+          <button
+            class="zcode-reader-action-btn"
+            :class="{ active: feedbackState === 'up' }"
+            :aria-pressed="feedbackState === 'up'"
+            title="有帮助"
+            @click="feedbackState = feedbackState === 'up' ? '' : 'up'"
+          >
+            <ThumbsUp :size="18" :stroke-width="1.8" />
+          </button>
+          <button
+            class="zcode-reader-action-btn"
+            :class="{ active: feedbackState === 'down' }"
+            :aria-pressed="feedbackState === 'down'"
+            title="无帮助"
+            @click="feedbackState = feedbackState === 'down' ? '' : 'down'"
+          >
+            <ThumbsDown :size="18" :stroke-width="1.8" />
+          </button>
+          <button class="zcode-reader-action-btn" title="重新加载阅读页" @click="emit('refresh-reader')">
+            <RotateCcw :size="18" :stroke-width="1.8" />
+          </button>
+          <button class="zcode-reader-action-btn" title="全屏阅读" @click="toggleFullscreen">
+            <Maximize2 :size="18" :stroke-width="1.8" />
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 </template>

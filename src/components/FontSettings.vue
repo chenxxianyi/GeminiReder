@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useBookStore } from '../stores/bookStore';
 import { X, Type, Check } from 'lucide-vue-next';
 
@@ -26,6 +26,15 @@ const fontSizes = [12, 13, 14, 15, 16, 17, 18, 20, 22, 24];
 
 const selectedFont = ref(bookStore.fontFamily);
 const selectedSize = ref(bookStore.fontSize);
+
+watch(
+  () => props.show,
+  (show) => {
+    if (!show) return;
+    selectedFont.value = bookStore.fontFamily;
+    selectedSize.value = bookStore.fontSize;
+  }
+);
 
 const handleApply = () => {
   bookStore.setFontFamily(selectedFont.value);

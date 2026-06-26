@@ -3,8 +3,15 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   ChevronDown,
+  Folder,
+  GitBranch,
   Minus,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRight,
   Square,
+  Terminal,
   X
 } from 'lucide-vue-next';
 
@@ -24,6 +31,10 @@ defineProps({
   commandOpen: {
     type: Boolean,
     default: false
+  },
+  sidebarCollapsed: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -34,6 +45,7 @@ const emit = defineEmits([
   'toggle-command',
   'open-settings',
   'open-toc',
+  'open-progress',
   'open-bookmarks'
 ]);
 
@@ -104,8 +116,42 @@ onUnmounted(() => {
 
 <template>
   <header class="zcode-title-bar">
+    <div class="zcode-title-left zcode-no-drag">
+      <button
+        class="zcode-title-tool zcode-title-sidebar-toggle"
+        :title="sidebarCollapsed ? 'Show sidebar (Ctrl+Shift+L)' : 'Hide sidebar (Ctrl+Shift+L)'"
+        @click="emit('toggle-sidebar')"
+      >
+        <PanelLeftOpen v-if="sidebarCollapsed" :size="20" :stroke-width="1.8" />
+        <PanelLeftClose v-else :size="20" :stroke-width="1.8" />
+      </button>
+      <div class="zcode-title-name" :title="title">{{ title }}</div>
+      <button class="zcode-title-pill" title="Project">
+        <Folder :size="21" :stroke-width="1.85" />
+        <span>{{ projectName }}</span>
+      </button>
+      <button class="zcode-title-pill" title="Branch">
+        <GitBranch :size="21" :stroke-width="1.85" />
+        <span>{{ branchName }}</span>
+        <ChevronDown :size="17" :stroke-width="1.9" />
+      </button>
+      <button class="zcode-title-more" title="More">
+        <MoreHorizontal :size="22" :stroke-width="2" />
+      </button>
+    </div>
+
     <div class="zcode-title-spacer" data-tauri-drag-region></div>
     <div class="zcode-title-actions zcode-no-drag">
+      <button class="zcode-title-tool zcode-title-tool-raised" title="Project files" @click="emit('open-toc')">
+        <Folder :size="20" :stroke-width="1.85" />
+        <ChevronDown :size="14" :stroke-width="1.9" />
+      </button>
+      <button class="zcode-title-tool" title="Terminal" @click="emit('open-progress')">
+        <Terminal :size="20" :stroke-width="1.75" />
+      </button>
+      <button class="zcode-title-tool" title="Panel">
+        <PanelRight :size="20" :stroke-width="1.75" />
+      </button>
       <button class="zcode-title-tool" title="Toggle command box" @click="emit('toggle-command')">
         <ChevronDown :size="21" :stroke-width="1.9" />
       </button>

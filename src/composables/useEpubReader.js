@@ -48,9 +48,27 @@ export function useEpubReader() {
   let book = null;
   let rendition = null;
   let resizeRaf = 0;
+  let initRequestId = 0;
 
   const getThemeColors = () => {
     return isDark.value ? DEFAULT_THEME.dark : DEFAULT_THEME.light;
+  };
+
+  const clampReaderFontSize = (value) => {
+    const parsedSize = Number(value);
+    if (!Number.isFinite(parsedSize)) return 14;
+    return Math.min(Math.max(parsedSize, 12), 24);
+  };
+
+  const getReaderTypography = () => {
+    const baseSize = clampReaderFontSize(bookStore.fontSize);
+    return {
+      fontFamily: `"${bookStore.fontFamily}", "Noto Sans SC", "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif`,
+      fontSize: `${baseSize}px`,
+      h1Size: `${Math.round(baseSize * 1.85)}px`,
+      h2Size: `${Math.round(baseSize * 1.55)}px`,
+      h3Size: `${Math.round(baseSize * 1.25)}px`
+    };
   };
 
   const applyFontThemeToView = (view) => {
@@ -66,8 +84,7 @@ export function useEpubReader() {
     }
 
     const colors = getThemeColors();
-    const fontFamily = `"${bookStore.fontFamily}", "JetBrains Mono", "Fira Code", "Noto Sans SC", monospace`;
-    const fontSize = `${bookStore.fontSize}px`;
+    const { fontFamily, fontSize, h1Size, h2Size, h3Size } = getReaderTypography();
 
     const style = doc.createElement('style');
     style.id = 'zcode-reader-theme';
@@ -76,28 +93,106 @@ export function useEpubReader() {
         background-color: ${colors.background} !important;
         color: ${colors.text} !important;
         font-family: ${fontFamily} !important;
+        min-height: 100% !important;
+        margin: 0 !important;
+        padding-top: 0 !important;
+        overflow-x: hidden !important;
+        letter-spacing: 0 !important;
       }
       body {
-        padding: 40px 32px !important;
-        margin: 0 auto !important;
-        max-width: 920px !important;
+        display: block !important;
+        height: auto !important;
+        padding: 0 0 320px !important;
+        margin: 0 !important;
+        max-width: none !important;
         box-sizing: border-box !important;
+      }
+      body > *,
+      body > *:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+      }
+      body > section,
+      body > article,
+      body > main,
+      body > div {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+      }
+      section, article, main, div {
+        vertical-align: top !important;
+      }
+      body > section,
+      body > article,
+      body > main,
+      body > div,
+      body > nav + section,
+      body > nav + article,
+      body > nav + main {
+        width: 100% !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
       }
       p, span, li, div, section, article, blockquote {
         background-color: transparent !important;
         color: ${colors.text} !important;
         font-family: ${fontFamily} !important;
         font-size: ${fontSize} !important;
-        line-height: 1.85 !important;
+        line-height: 2.08 !important;
+        letter-spacing: 0 !important;
+      }
+      p {
+        margin: 0 0 1.02em !important;
+        text-indent: 2em !important;
       }
       h1, h2, h3, h4, h5, h6 {
         color: ${colors.heading} !important;
         font-family: ${fontFamily} !important;
-        font-weight: 600 !important;
-        line-height: 1.35 !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
         border-bottom: 1px solid ${colors.border} !important;
-        padding-bottom: 0.45em !important;
-        margin-top: 1.8em !important;
+        padding: 0 0 0.72em !important;
+        margin: 0 0 2.2em !important;
+        text-indent: 0 !important;
+      }
+      h1::before,
+      h2::before {
+        content: "" !important;
+        display: inline-block !important;
+        width: 39px !important;
+        height: 5px !important;
+        margin-right: 42px !important;
+        vertical-align: middle !important;
+        background: ${colors.heading} !important;
+        border-radius: 1px !important;
+      }
+      h1 {
+        font-size: ${h1Size} !important;
+      }
+      h2 {
+        font-size: ${h2Size} !important;
+      }
+      h3 {
+        font-size: ${h3Size} !important;
+        margin-top: 1.45em !important;
+      }
+      ol, ul {
+        margin: 0 0 1.1em 2em !important;
+        padding: 0 !important;
+      }
+      li {
+        margin: 0 0 0.55em !important;
+        padding-left: 0.25em !important;
+      }
+      blockquote {
+        margin: 1.15em 0 1.35em 2em !important;
+        padding: 0 0 0 1.2em !important;
+        border-left: 2px solid ${colors.border} !important;
+        color: ${colors.text} !important;
       }
       a {
         color: ${colors.heading} !important;
@@ -131,34 +226,99 @@ export function useEpubReader() {
     if (!rendition) return;
 
     const colors = getThemeColors();
-    const fontFamily = `"${bookStore.fontFamily}", "JetBrains Mono", "Fira Code", "Noto Sans SC", monospace`;
-    const fontSize = `${bookStore.fontSize}px`;
+    const { fontFamily, fontSize, h1Size, h2Size, h3Size } = getReaderTypography();
 
     rendition.themes.default({
       body: {
         'background-color': `${colors.background} !important`,
         color: `${colors.text} !important`,
         'font-family': `${fontFamily} !important`,
-        padding: '40px 32px !important',
-        margin: '0 auto !important',
-        'max-width': '920px !important',
+        'min-height': '100% !important',
+        display: 'block !important',
+        height: 'auto !important',
+        'padding-top': '0 !important',
+        'overflow-x': 'hidden !important',
+        'letter-spacing': '0 !important',
+        padding: '0 0 320px !important',
+        margin: '0 !important',
+        'max-width': 'none !important',
         'box-sizing': 'border-box !important'
+      },
+      'body > *, body > *:first-child': {
+        'margin-top': '0 !important',
+        'padding-top': '0 !important'
+      },
+      'body > section, body > article, body > main, body > div': {
+        display: 'block !important',
+        height: 'auto !important',
+        'min-height': '0 !important',
+        'align-items': 'flex-start !important',
+        'justify-content': 'flex-start !important'
+      },
+      'section, article, main, div': {
+        'vertical-align': 'top !important'
+      },
+      'body > section, body > article, body > main, body > div, body > nav + section, body > nav + article, body > nav + main': {
+        width: '100% !important',
+        'max-width': 'none !important',
+        'margin-left': '0 !important',
+        'margin-right': '0 !important'
       },
       'p, span, li, div, section, article, blockquote': {
         'background-color': 'transparent !important',
         color: `${colors.text} !important`,
         'font-family': `${fontFamily} !important`,
         'font-size': `${fontSize} !important`,
-        'line-height': '1.85 !important'
+        'line-height': '2.08 !important',
+        'letter-spacing': '0 !important'
+      },
+      p: {
+        margin: '0 0 1.02em !important',
+        'text-indent': '2em !important'
       },
       'h1, h2, h3, h4, h5, h6': {
         color: `${colors.heading} !important`,
         'font-family': `${fontFamily} !important`,
-        'font-weight': '600 !important',
-        'line-height': '1.35 !important',
+        'font-weight': '800 !important',
+        'line-height': '1.25 !important',
         'border-bottom': `1px solid ${colors.border} !important`,
-        'padding-bottom': '0.45em !important',
-        'margin-top': '1.8em !important'
+        padding: '0 0 0.72em !important',
+        margin: '0 0 2.2em !important',
+        'text-indent': '0 !important'
+      },
+      'h1::before, h2::before': {
+        content: '"" !important',
+        display: 'inline-block !important',
+        width: '39px !important',
+        height: '5px !important',
+        'margin-right': '42px !important',
+        'vertical-align': 'middle !important',
+        background: `${colors.heading} !important`,
+        'border-radius': '1px !important'
+      },
+      h1: {
+        'font-size': `${h1Size} !important`
+      },
+      h2: {
+        'font-size': `${h2Size} !important`
+      },
+      h3: {
+        'font-size': `${h3Size} !important`,
+        'margin-top': '1.45em !important'
+      },
+      'ol, ul': {
+        margin: '0 0 1.1em 2em !important',
+        padding: '0 !important'
+      },
+      li: {
+        margin: '0 0 0.55em !important',
+        'padding-left': '0.25em !important'
+      },
+      blockquote: {
+        margin: '1.15em 0 1.35em 2em !important',
+        padding: '0 0 0 1.2em !important',
+        'border-left': `2px solid ${colors.border} !important`,
+        color: `${colors.text} !important`
       },
       a: {
         color: `${colors.heading} !important`,
@@ -219,6 +379,34 @@ export function useEpubReader() {
     toc.value = [];
   };
 
+  const waitForReaderArea = async () => {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const area = readerArea.value;
+      if (area?.clientWidth > 0 && area?.clientHeight > 0) {
+        return area;
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return readerArea.value;
+  };
+
+  const renderReaderMessage = (message) => {
+    if (!readerArea.value) return;
+    readerArea.value.innerHTML = `
+      <div style="
+        min-height: 100%;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding: 88px 64px;
+        color: #8f8f8f;
+        font: 600 18px/1.6 'Noto Sans SC', 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+      ">
+        ${message}
+      </div>
+    `;
+  };
+
   const handleResize = () => {
     if (!rendition || !readerArea.value) return;
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
@@ -269,6 +457,8 @@ export function useEpubReader() {
     try {
       await rendition.display(href);
       await new Promise((resolve) => setTimeout(resolve, 150));
+      applyFontTheme();
+      handleResize();
 
       const iframe = readerArea.value?.querySelector('iframe');
       if (iframe?.contentWindow) {
@@ -282,6 +472,9 @@ export function useEpubReader() {
         const spineItem = book.spine.get(href);
         if (spineItem) {
           await rendition.display(spineItem.index);
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          applyFontTheme();
+          handleResize();
           return;
         }
       } catch (spineError) {
@@ -291,6 +484,9 @@ export function useEpubReader() {
       const cleanHref = href.split('#')[0];
       try {
         await rendition.display(cleanHref);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        applyFontTheme();
+        handleResize();
       } catch (fallbackError) {
         console.error('Fallback chapter navigation failed:', fallbackError);
       }
@@ -314,23 +510,39 @@ export function useEpubReader() {
   };
 
   const initReader = async () => {
+    const requestId = ++initRequestId;
     if (!bookStore.currentBookId || !readerArea.value) return;
 
     isLoading.value = true;
     destroyReader();
 
+    const area = await waitForReaderArea();
+    if (requestId !== initRequestId) return;
+    if (!area || area.clientWidth <= 0 || area.clientHeight <= 0) {
+      renderReaderMessage('Task content is waiting for a stable workspace size.');
+      isLoading.value = false;
+      return;
+    }
+
     const bookData = await bookStore.getBookData(bookStore.currentBookId);
+    if (requestId !== initRequestId) return;
     if (!bookData) {
+      renderReaderMessage('Task content is unavailable. Please import this task file again.');
       isLoading.value = false;
       return;
     }
 
     try {
       const arrayBuffer = await bookData.arrayBuffer();
+      if (requestId !== initRequestId) return;
+
       book = ePub(arrayBuffer);
-      rendition = book.renderTo(readerArea.value, {
-        width: '100%',
-        height: '100%',
+      const renderWidth = Math.max(area.clientWidth, 320);
+      const renderHeight = Math.max(area.clientHeight, 320);
+
+      rendition = book.renderTo(area, {
+        width: renderWidth,
+        height: renderHeight,
         flow: 'scrolled-doc',
         manager: 'continuous'
       });
@@ -349,21 +561,36 @@ export function useEpubReader() {
       });
 
       const navigation = await book.loaded.navigation;
+      if (requestId !== initRequestId) return;
       toc.value = buildToc(navigation?.toc || []);
 
       await rendition.display();
+      if (requestId !== initRequestId) return;
       applyFontTheme();
+      handleResize();
 
       const currentBook = bookStore.books.find((entry) => entry.id === bookStore.currentBookId);
       if (currentBook?.cfi) {
-        await rendition.display(currentBook.cfi);
+        try {
+          await rendition.display(currentBook.cfi);
+        } catch (restoreError) {
+          console.warn('[ZCode] Failed to restore reader location, opening the first section:', restoreError);
+          await rendition.display();
+        }
+        if (requestId !== initRequestId) return;
+        applyFontTheme();
       }
 
       handleResize();
     } catch (error) {
-      console.error('Error rendering book:', error);
+      if (requestId === initRequestId) {
+        console.error('Error rendering book:', error);
+        renderReaderMessage('Task content failed to render. Try reopening the task.');
+      }
     } finally {
-      isLoading.value = false;
+      if (requestId === initRequestId) {
+        isLoading.value = false;
+      }
     }
   };
 
