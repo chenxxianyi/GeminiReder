@@ -2,15 +2,20 @@
 import { computed } from 'vue';
 import { useBookStore } from '../../stores/bookStore';
 import {
+  ArrowLeft,
+  ArrowRight,
+  Archive,
+  BookOpen,
   Folder,
-  Layers3,
-  MoreHorizontal,
-  Plus,
+  ListFilter,
+  Maximize2,
+  MessageCirclePlus,
   Search,
   Settings,
-  Sparkles,
+  Smartphone,
   Wand2
 } from 'lucide-vue-next';
+import zhipuIcon from '../../../zhipu.svg';
 
 const props = defineProps({
   collapsed: {
@@ -23,25 +28,85 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['select-book', 'new-task', 'open-search', 'toggle-collapsed', 'open-settings']);
+const emit = defineEmits([
+  'select-book',
+  'new-task',
+  'back',
+  'forward',
+  'open-search',
+  'open-zlib',
+  'toggle-collapsed',
+  'open-settings'
+]);
 
 const bookStore = useBookStore();
 
+const formatRelativeTime = (timestamp, index = 0) => {
+  if (!timestamp) {
+    return index === 0 ? '9分钟' : '1小时';
+  }
+
+  const diff = Date.now() - timestamp;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))}分钟`;
+  if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))}小时`;
+  if (diff < 172_800_000) return '昨天';
+  return `${Math.max(2, Math.floor(diff / 86_400_000))}天`;
+};
+
 const recentTasks = computed(() => {
-  const books = bookStore.books.map((book, index) => ({
-    id: book.id,
-    title: book.fakeTitle || book.title || `Reading Task ${index + 1}`,
-    time: index === 0 ? '23分' : '1小时',
-    active: book.id === props.currentBookId
-  }));
+  const books = [...bookStore.books]
+    .sort((left, right) => (right.lastOpenedAt || right.addedAt || 0) - (left.lastOpenedAt || left.addedAt || 0))
+    .map((book, index) => ({
+      id: book.id,
+      title: book.fakeTitle || book.title || `Reading Task ${index + 1}`,
+      project: book.fakeProject || 'NoteWeb',
+      type: book.fakeType || 'Review',
+      time: formatRelativeTime(book.lastOpenedAt || book.addedAt, index),
+      active: book.id === props.currentBookId
+    }));
 
   if (books.length > 0) return books;
 
   return [
-    { id: 'placeholder-1', title: 'Repository Detail Page AI Tools Integration', time: '23分', active: true },
-    { id: 'placeholder-2', title: '文件库AI工具功能开发', time: '1小时', active: false },
-    { id: 'placeholder-3', title: 'Request Entity Too Large Error Fix', time: '1小时', active: false }
+    { id: 'placeholder-hi', title: 'hi', project: 'NoteWeb', type: '', time: '2小时', active: false },
+    { id: 'placeholder-reader', title: '/reader/11 缺失AI工具按钮', project: 'NoteWeb', type: '', time: '18小时', active: false },
+    { id: 'placeholder-repo', title: 'Repository Detail Page AI', project: 'NoteWeb', type: '', time: '19小时', active: false, accent: true },
+    { id: 'placeholder-library', title: '文件库AI工具功能开发', project: 'NoteWeb', type: '', time: '20小时', active: false, accent: true },
+    { id: 'placeholder-large', title: 'Request Entity Too Large', project: 'NoteWeb', type: '', time: '20小时', active: false, accent: true }
   ];
+});
+
+const groupedTasks = computed(() => {
+  return recentTasks.value.reduce((groups, task) => {
+    if (!groups[task.project]) {
+      groups[task.project] = [];
+    }
+    groups[task.project].push(task);
+    return groups;
+  }, {});
+});
+
+const projectNames = computed(() => Object.keys(groupedTasks.value));
+
+const displaySections = computed(() => {
+  const sections = projectNames.value.map((projectName) => ({
+      name: projectName,
+      tasks: groupedTasks.value[projectName],
+      emptyText: ''
+    }));
+
+  ['GeminiReder', 'ZCodeProject'].forEach((name, index) => {
+    if (!sections.some((section) => section.name === name)) {
+      sections.splice(index === 0 ? 0 : sections.length, 0, {
+        name,
+        tasks: [],
+        emptyText: '暂无任务'
+      });
+    }
+  });
+
+  return sections;
 });
 
 const selectTask = (task) => {
@@ -52,26 +117,36 @@ const selectTask = (task) => {
 
 <template>
   <aside class="zcode-sidebar" :class="{ collapsed }">
-    <div class="zcode-sidebar-header">
-      <span>Explorer</span>
-      <button class="zcode-mini-btn" title="More">
-        <MoreHorizontal :size="14" />
+    <div class="zcode-sidebar-windowbar" data-tauri-drag-region>
+      <div class="zcode-logo-mark zcode-no-drag" title="Zhipu">
+        <img :src="zhipuIcon" alt="Zhipu" />
+      </div>
+      <button class="zcode-nav-btn zcode-no-drag" title="Back" @click="$emit('back')">
+        <ArrowLeft :size="19" />
+      </button>
+      <button class="zcode-nav-btn zcode-no-drag" title="Forward" @click="$emit('forward')">
+        <ArrowRight :size="19" />
       </button>
     </div>
 
     <div class="zcode-sidebar-top">
       <button class="zcode-sidebar-action" @click="$emit('new-task')">
-        <Plus :size="16" />
+        <MessageCirclePlus :size="22" :stroke-width="1.75" />
         <span>新建任务</span>
         <kbd>Ctrl+N</kbd>
       </button>
       <button class="zcode-sidebar-action" @click="$emit('open-search')">
-        <Search :size="16" />
+        <Search :size="22" :stroke-width="1.75" />
         <span>搜索</span>
         <kbd>Ctrl+K</kbd>
       </button>
+      <button class="zcode-sidebar-action" title="Open Z-Lib" @click="$emit('open-zlib')">
+        <BookOpen :size="22" :stroke-width="1.75" />
+        <span>Z-Lib</span>
+        <kbd>Web</kbd>
+      </button>
       <button class="zcode-sidebar-action" @click="$emit('open-settings', 'font')">
-        <Wand2 :size="16" />
+        <Wand2 :size="22" :stroke-width="1.75" />
         <span>技能</span>
       </button>
     </div>
@@ -86,55 +161,53 @@ const selectTask = (task) => {
         <span>项目</span>
       </button>
       <button class="zcode-mini-btn" title="Collapse" @click="$emit('toggle-collapsed')">
-        <Layers3 :size="14" />
+        <Maximize2 :size="14" />
+      </button>
+      <button class="zcode-mini-btn" title="Filter">
+        <ListFilter :size="15" />
+      </button>
+      <button class="zcode-mini-btn" title="Archive">
+        <Archive :size="15" />
       </button>
     </div>
 
     <div class="zcode-project-list zcode-scroll">
-      <section class="zcode-project-block">
+      <section v-for="section in displaySections" :key="section.name" class="zcode-project-block">
         <div class="zcode-project-name">
-          <Folder :size="15" />
-          <span>GeminiReder</span>
-        </div>
-        <div class="zcode-empty-text">暂无任务</div>
-      </section>
-
-      <section class="zcode-project-block">
-        <div class="zcode-project-name">
-          <Folder :size="15" />
-          <span>NoteWeb</span>
+          <Folder :size="17" :stroke-width="1.7" />
+          <span>{{ section.name }}</span>
         </div>
 
         <button
-          v-for="task in recentTasks"
+          v-for="task in section.tasks"
           :key="task.id"
           class="zcode-task-item"
           :class="{ active: task.active }"
           @click="selectTask(task)"
         >
-          <Sparkles v-if="task.active" :size="14" class="zcode-task-spinner" />
-          <span v-else class="zcode-task-dot"></span>
-          <span class="zcode-task-title">{{ task.title }}</span>
+          <span class="zcode-task-dot" :class="{ accent: task.accent || task.active, empty: !task.accent && !task.active }"></span>
+          <div class="min-w-0">
+            <span class="zcode-task-title">{{ task.title }}</span>
+            <span class="zcode-task-type">{{ task.type }}</span>
+          </div>
           <span class="zcode-task-time">{{ task.time }}</span>
         </button>
-
-        <button class="zcode-more-link">显示更多</button>
-      </section>
-
-      <section class="zcode-project-block">
-        <div class="zcode-project-name">
-          <Folder :size="15" />
-          <span>ZCodeProject</span>
-        </div>
-        <div class="zcode-empty-text">暂无任务</div>
+        <button v-if="section.name === 'NoteWeb' && section.tasks.length >= 4" class="zcode-more-link">显示更多</button>
+        <div v-if="section.tasks.length === 0" class="zcode-empty-text">{{ section.emptyText }}</div>
       </section>
     </div>
 
+    <div class="zcode-sidebar-scroll-indicator" aria-hidden="true">
+      <span></span>
+    </div>
+
     <div class="zcode-sidebar-user">
-      <div class="zcode-avatar">不</div>
+      <div class="zcode-avatar">
+        <img :src="zhipuIcon" alt="" />
+      </div>
       <div class="zcode-user-name">不吃番茄</div>
       <button class="zcode-mini-btn" title="Device">
-        <span class="zcode-device-icon"></span>
+        <Smartphone :size="16" />
       </button>
       <button class="zcode-mini-btn" title="Settings" @click="$emit('open-settings', 'font')">
         <Settings :size="15" />

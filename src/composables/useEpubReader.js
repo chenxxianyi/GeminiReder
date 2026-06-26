@@ -1,40 +1,323 @@
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useBookStore } from '../stores/bookStore';
 import ePub from 'epubjs';
 
-/**
- * EPUB Reader Composable
- * Handles all EPUB rendering logic, can be reused by different shells
- */
+const DEFAULT_THEME = {
+  dark: {
+    background: '#111111',
+    text: '#d4d4d4',
+    heading: '#e8c06d',
+    border: '#2f2f2f',
+    scrollbar: 'rgba(212, 212, 212, 0.22)',
+    scrollbarHover: 'rgba(212, 212, 212, 0.38)'
+  },
+  light: {
+    background: '#ffffff',
+    text: '#1f1f1f',
+    heading: '#7f4f00',
+    border: '#d9d9d9',
+    scrollbar: 'rgba(95, 99, 104, 0.28)',
+    scrollbarHover: 'rgba(95, 99, 104, 0.45)'
+  }
+};
+
+const buildToc = (items = []) => {
+  return items.map((item, index) => ({
+    ...item,
+    id: item.id || item.href || `toc-${index}`,
+    href: item.href || item.id,
+    label: item.label || item.title || `Section ${index + 1}`,
+    subitems: buildToc(item.subitems || [])
+  }));
+};
+
+const isTypingTarget = (target) => {
+  if (!target || !target.tagName) return false;
+  const tagName = target.tagName.toUpperCase();
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName);
+};
+
 export function useEpubReader() {
   const bookStore = useBookStore();
 
-  // State
   const readerArea = ref(null);
   const toc = ref([]);
   const isDark = ref(true);
   const isLoading = ref(false);
 
-  // Internal state
   let book = null;
   let rendition = null;
   let resizeRaf = 0;
 
-  /**
-   * Initialize the reader with current book
-   */
-  const initReader = async () => {
-    if (!bookStore.currentBookId || !readerArea.value) return;
+  const getThemeColors = () => {
+    return isDark.value ? DEFAULT_THEME.dark : DEFAULT_THEME.light;
+  };
 
-    isLoading.value = true;
+  const applyFontThemeToView = (view) => {
+    if (!view?.document) return;
 
-    // Clean up existing book
+    const doc = view.document;
+    const head = doc.querySelector('head');
+    if (!head) return;
+
+    const existingStyle = doc.querySelector('#zcode-reader-theme');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+
+    const colors = getThemeColors();
+    const fontFamily = `"${bookStore.fontFamily}", "JetBrains Mono", "Fira Code", "Noto Sans SC", monospace`;
+    const fontSize = `${bookStore.fontSize}px`;
+
+    const style = doc.createElement('style');
+    style.id = 'zcode-reader-theme';
+    style.textContent = `
+      html, body {
+        background-color: ${colors.background} !important;
+        color: ${colors.text} !important;
+        font-family: ${fontFamily} !important;
+      }
+      body {
+        padding: 40px 32px !important;
+        margin: 0 auto !important;
+        max-width: 920px !important;
+        box-sizing: border-box !important;
+      }
+      p, span, li, div, section, article, blockquote {
+        background-color: transparent !important;
+        color: ${colors.text} !important;
+        font-family: ${fontFamily} !important;
+        font-size: ${fontSize} !important;
+        line-height: 1.85 !important;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        color: ${colors.heading} !important;
+        font-family: ${fontFamily} !important;
+        font-weight: 600 !important;
+        line-height: 1.35 !important;
+        border-bottom: 1px solid ${colors.border} !important;
+        padding-bottom: 0.45em !important;
+        margin-top: 1.8em !important;
+      }
+      a {
+        color: ${colors.heading} !important;
+        text-decoration: none !important;
+      }
+      pre, code {
+        font-family: ${fontFamily} !important;
+      }
+      img, svg {
+        max-width: 100% !important;
+        opacity: 0.9;
+        filter: saturate(0.85);
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: ${colors.scrollbar};
+        border-radius: 999px;
+      }
+    `;
+
+    head.appendChild(style);
+  };
+
+  const applyFontTheme = () => {
+    if (!rendition) return;
+
+    const colors = getThemeColors();
+    const fontFamily = `"${bookStore.fontFamily}", "JetBrains Mono", "Fira Code", "Noto Sans SC", monospace`;
+    const fontSize = `${bookStore.fontSize}px`;
+
+    rendition.themes.default({
+      body: {
+        'background-color': `${colors.background} !important`,
+        color: `${colors.text} !important`,
+        'font-family': `${fontFamily} !important`,
+        padding: '40px 32px !important',
+        margin: '0 auto !important',
+        'max-width': '920px !important',
+        'box-sizing': 'border-box !important'
+      },
+      'p, span, li, div, section, article, blockquote': {
+        'background-color': 'transparent !important',
+        color: `${colors.text} !important`,
+        'font-family': `${fontFamily} !important`,
+        'font-size': `${fontSize} !important`,
+        'line-height': '1.85 !important'
+      },
+      'h1, h2, h3, h4, h5, h6': {
+        color: `${colors.heading} !important`,
+        'font-family': `${fontFamily} !important`,
+        'font-weight': '600 !important',
+        'line-height': '1.35 !important',
+        'border-bottom': `1px solid ${colors.border} !important`,
+        'padding-bottom': '0.45em !important',
+        'margin-top': '1.8em !important'
+      },
+      a: {
+        color: `${colors.heading} !important`,
+        'text-decoration': 'none !important'
+      },
+      'pre, code': {
+        'font-family': `${fontFamily} !important`
+      },
+      'img, svg': {
+        'max-width': '100% !important',
+        opacity: '0.9',
+        filter: 'saturate(0.85)'
+      },
+      html: {
+        'scrollbar-width': 'thin',
+        'scrollbar-color': `${colors.scrollbar} transparent`
+      },
+      '::-webkit-scrollbar': {
+        width: '6px',
+        height: '6px'
+      },
+      '::-webkit-scrollbar-track': {
+        background: 'transparent'
+      },
+      '::-webkit-scrollbar-thumb': {
+        'background-color': colors.scrollbar,
+        'border-radius': '999px'
+      },
+      '::-webkit-scrollbar-thumb:hover': {
+        'background-color': colors.scrollbarHover
+      }
+    });
+
+    if (rendition.views) {
+      rendition.views().forEach((view) => {
+        applyFontThemeToView(view);
+        if (view?.pane) view.pane.render();
+      });
+    }
+  };
+
+  const destroyReader = () => {
+    if (resizeRaf) {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = 0;
+    }
+
     if (book) {
       book.destroy();
       book = null;
       rendition = null;
-      if (readerArea.value) readerArea.value.innerHTML = '';
     }
+
+    if (readerArea.value) {
+      readerArea.value.innerHTML = '';
+    }
+
+    toc.value = [];
+  };
+
+  const handleResize = () => {
+    if (!rendition || !readerArea.value) return;
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(() => {
+      try {
+        rendition.resize(readerArea.value.clientWidth, readerArea.value.clientHeight);
+      } catch (error) {
+        console.error('Failed to resize rendition:', error);
+      }
+    });
+  };
+
+  const saveProgress = () => {
+    if (!rendition || !bookStore.currentBookId) return;
+    const location = rendition.currentLocation();
+    const cfi = location?.start?.cfi;
+    if (cfi) {
+      bookStore.updateProgress(bookStore.currentBookId, cfi);
+    }
+  };
+
+  const getCurrentCfi = () => {
+    if (!rendition) return null;
+    const location = rendition.currentLocation();
+    return location?.start?.cfi || null;
+  };
+
+  const nextSection = () => {
+    if (rendition) {
+      rendition.next();
+    }
+  };
+
+  const prevSection = () => {
+    if (rendition) {
+      rendition.prev();
+    }
+  };
+
+  const jumpToCfi = async (cfi) => {
+    if (!rendition || !cfi) return;
+    await rendition.display(cfi);
+  };
+
+  const navigateToChapter = async (href) => {
+    if (!rendition || !book || !href) return;
+
+    try {
+      await rendition.display(href);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const iframe = readerArea.value?.querySelector('iframe');
+      if (iframe?.contentWindow) {
+        try {
+          iframe.contentWindow.scrollTo(0, 0);
+        } catch {}
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+      try {
+        const spineItem = book.spine.get(href);
+        if (spineItem) {
+          await rendition.display(spineItem.index);
+          return;
+        }
+      } catch (spineError) {
+        console.error('Spine navigation failed:', spineError);
+      }
+
+      const cleanHref = href.split('#')[0];
+      try {
+        await rendition.display(cleanHref);
+      } catch (fallbackError) {
+        console.error('Fallback chapter navigation failed:', fallbackError);
+      }
+    }
+  };
+
+  const handleReaderKeydown = (event) => {
+    if (!rendition) return;
+    if (isTypingTarget(event.target)) return;
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      prevSection();
+      return;
+    }
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'Enter') {
+      event.preventDefault();
+      nextSection();
+    }
+  };
+
+  const initReader = async () => {
+    if (!bookStore.currentBookId || !readerArea.value) return;
+
+    isLoading.value = true;
+    destroyReader();
 
     const bookData = await bookStore.getBookData(bookStore.currentBookId);
     if (!bookData) {
@@ -42,9 +325,8 @@ export function useEpubReader() {
       return;
     }
 
-    const arrayBuffer = await bookData.arrayBuffer();
-
     try {
+      const arrayBuffer = await bookData.arrayBuffer();
       book = ePub(arrayBuffer);
       rendition = book.renderTo(readerArea.value, {
         width: '100%',
@@ -53,323 +335,38 @@ export function useEpubReader() {
         manager: 'continuous'
       });
 
-      applyFontTheme();
+      rendition.on('rendered', (_, view) => {
+        if (!view?.document) return;
+        view.document.addEventListener('keydown', handleReaderKeydown);
+        applyFontThemeToView(view);
+      });
 
-      rendition.on('rendered', (section, view) => {
-        const iframe = view.document;
-        if (iframe) {
-          iframe.addEventListener('keydown', handleKeydown);
-          applyFontThemeToView(view);
+      rendition.on('relocated', (location) => {
+        const cfi = location?.start?.cfi;
+        if (bookStore.currentBookId && cfi) {
+          bookStore.updateProgress(bookStore.currentBookId, cfi);
         }
       });
 
       const navigation = await book.loaded.navigation;
-
-      const processTocItems = (items) => {
-        return items.map(item => {
-          const processed = {
-            ...item,
-            href: item.href || item.id,
-            label: item.label || item.title || '未命名章节'
-          };
-
-          if (item.subitems && item.subitems.length > 0) {
-            processed.subitems = processTocItems(item.subitems);
-          }
-
-          return processed;
-        });
-      };
-
-      toc.value = processTocItems(navigation.toc || []);
+      toc.value = buildToc(navigation?.toc || []);
 
       await rendition.display();
-
-      // Re-apply theme to ensure it takes effect after display
       applyFontTheme();
 
-      const currentBookObj = bookStore.books.find(b => b.id === bookStore.currentBookId);
-      if (currentBookObj && currentBookObj.cfi) {
-        await rendition.display(currentBookObj.cfi);
+      const currentBook = bookStore.books.find((entry) => entry.id === bookStore.currentBookId);
+      if (currentBook?.cfi) {
+        await rendition.display(currentBook.cfi);
       }
 
-      rendition.on('relocated', (location) => {
-        bookStore.updateProgress(bookStore.currentBookId, location.start.cfi);
-      });
-
       handleResize();
-    } catch (e) {
-      console.error("Error rendering book:", e);
+    } catch (error) {
+      console.error('Error rendering book:', error);
     } finally {
       isLoading.value = false;
     }
   };
 
-  /**
-   * Destroy the reader and clean up
-   */
-  const destroyReader = () => {
-    if (book) {
-      book.destroy();
-      book = null;
-      rendition = null;
-      if (readerArea.value) readerArea.value.innerHTML = '';
-    }
-  };
-
-  /**
-   * Apply font theme to a specific view (iframe)
-   */
-  const applyFontThemeToView = (view) => {
-    if (!view || !view.document) return;
-
-    const doc = view.document;
-    const head = doc.querySelector('head');
-    if (!head) return;
-
-    // Remove existing custom style
-    const existingStyle = doc.querySelector('#gemini-theme-style');
-    if (existingStyle) {
-      existingStyle.remove();
-    }
-
-    const fontFamily = `"${bookStore.fontFamily}", monospace`;
-    const fontSize = `${bookStore.fontSize}px`;
-
-    const bgColor = isDark.value ? '#131314' : '#ffffff';
-    const textColor = isDark.value ? '#e3e3e3' : '#1f1f1f';
-    const headingColor = isDark.value ? '#a8c7fa' : '#1b6ef3';
-    const borderColor = isDark.value ? '#444746' : '#e0e3e1';
-
-    const style = doc.createElement('style');
-    style.id = 'gemini-theme-style';
-    style.textContent = `
-      html, body {
-        background-color: ${bgColor} !important;
-        color: ${textColor} !important;
-        font-family: ${fontFamily} !important;
-      }
-      body {
-        padding: 0 16px !important;
-        margin: 0 auto !important;
-        max-width: 760px !important;
-        box-sizing: border-box !important;
-      }
-      p, span, li, div, section {
-        font-family: ${fontFamily} !important;
-        color: ${textColor} !important;
-        line-height: 1.8 !important;
-        font-size: ${fontSize} !important;
-        background-color: transparent !important;
-      }
-      h1, h2, h3, h4, h5, h6 {
-        color: ${headingColor} !important;
-        font-family: ${fontFamily} !important;
-        font-weight: bold !important;
-        border-bottom: 1px solid ${borderColor} !important;
-        padding-bottom: 0.5em !important;
-        margin-top: 1.5em !important;
-      }
-      a {
-        color: ${headingColor} !important;
-        text-decoration: none !important;
-      }
-      img {
-        opacity: 0.9;
-        filter: grayscale(0%);
-        border: none;
-        max-width: 100% !important;
-      }
-      ::-webkit-scrollbar {
-        display: none;
-      }
-    `;
-    head.appendChild(style);
-  };
-
-  /**
-   * Apply font theme to all views
-   */
-  const applyFontTheme = () => {
-    if (!rendition) return;
-
-    // Apply to all current views
-    if (rendition.views) {
-      rendition.views().forEach(view => {
-        applyFontThemeToView(view);
-      });
-    }
-
-    const fontFamily = `"${bookStore.fontFamily}", monospace`;
-    const fontSize = `${bookStore.fontSize}px`;
-
-    const bgColor = isDark.value ? '#131314' : '#ffffff';
-    const textColor = isDark.value ? '#e3e3e3' : '#1f1f1f';
-    const headingColor = isDark.value ? '#a8c7fa' : '#1b6ef3';
-    const borderColor = isDark.value ? '#444746' : '#e0e3e1';
-    const scrollThumb = isDark.value ? 'rgba(196, 199, 197, 0.22)' : 'rgba(95, 99, 104, 0.28)';
-    const scrollThumbHover = isDark.value ? 'rgba(196, 199, 197, 0.35)' : 'rgba(95, 99, 104, 0.45)';
-
-    rendition.themes.default({
-      'body': {
-        'background-color': `${bgColor} !important`,
-        'color': `${textColor} !important`,
-        'font-family': `${fontFamily} !important`,
-        'padding': '0 16px !important',
-        'margin': '0 auto !important',
-        'max-width': '760px !important',
-        'box-sizing': 'border-box !important'
-      },
-      'p, span, li, div, section': {
-        'font-family': `${fontFamily} !important`,
-        'color': `${textColor} !important`,
-        'line-height': '1.8 !important',
-        'font-size': `${fontSize} !important`,
-        'background-color': 'transparent !important'
-      },
-      'h1, h2, h3, h4, h5, h6': {
-        'color': `${headingColor} !important`,
-        'font-family': `${fontFamily} !important`,
-        'font-weight': 'bold !important',
-        'border-bottom': `1px solid ${borderColor} !important`,
-        'padding-bottom': '0.5em !important',
-        'margin-top': '1.5em !important'
-      },
-      'a': {
-        'color': `${headingColor} !important`,
-        'text-decoration': 'none !important'
-      },
-      'img': {
-        'opacity': '0.9',
-        'filter': 'grayscale(0%)',
-        'border': 'none',
-        'max-width': '100% !important'
-      },
-      'html': {
-        'scrollbar-width': 'thin',
-        'scrollbar-color': `${scrollThumb} transparent`
-      },
-      '::-webkit-scrollbar': {
-        'width': '4px',
-        'height': '4px'
-      },
-      '::-webkit-scrollbar-track': {
-        'background': 'transparent'
-      },
-      '::-webkit-scrollbar-thumb': {
-        'background-color': scrollThumb,
-        'border-radius': '999px'
-      },
-      '::-webkit-scrollbar-thumb:hover': {
-        'background-color': scrollThumbHover
-      }
-    });
-
-    // Force update views
-    if (rendition.views) {
-      rendition.views().forEach(view => {
-        if (view && view.pane) view.pane.render();
-      });
-    }
-  };
-
-  /**
-   * Navigate to next section
-   */
-  const nextSection = () => {
-    if (rendition) {
-      rendition.next();
-    }
-  };
-
-  /**
-   * Navigate to previous section
-   */
-  const prevSection = () => {
-    if (rendition) {
-      rendition.prev();
-    }
-  };
-
-  /**
-   * Jump to specific CFI
-   */
-  const jumpToCfi = async (cfi) => {
-    if (rendition && cfi) {
-      await rendition.display(cfi);
-    }
-  };
-
-  /**
-   * Navigate to chapter by href
-   */
-  const navigateToChapter = async (href) => {
-    if (!rendition || !href || !book) return;
-
-    try {
-      await rendition.display(href);
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      const iframe = readerArea.value?.querySelector('iframe');
-      if (iframe && iframe.contentWindow) {
-        try {
-          iframe.contentWindow.scrollTo(0, 0);
-        } catch (e) {
-          // Cross-origin restriction, ignore
-        }
-      }
-    } catch (error) {
-      console.error('Navigation error:', error);
-
-      try {
-        const spineItem = book.spine.get(href);
-        if (spineItem) {
-          await rendition.display(spineItem.index);
-        }
-      } catch (e) {
-        console.error('Spine navigation failed:', e);
-
-        try {
-          const cleanHref = href.split('#')[0];
-          await rendition.display(cleanHref);
-        } catch (err) {
-          console.error('All navigation methods failed:', err);
-        }
-      }
-    }
-  };
-
-  /**
-   * Handle keyboard navigation
-   */
-  const handleKeydown = (e) => {
-    if (!rendition) return;
-
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      prevSection();
-      e.preventDefault();
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      nextSection();
-      e.preventDefault();
-    }
-  };
-
-  /**
-   * Handle window resize
-   */
-  const handleResize = () => {
-    if (!rendition || !readerArea.value) return;
-    if (resizeRaf) cancelAnimationFrame(resizeRaf);
-    resizeRaf = requestAnimationFrame(() => {
-      try {
-        rendition.resize(readerArea.value.clientWidth, readerArea.value.clientHeight);
-      } catch {}
-    });
-  };
-
-  /**
-   * Toggle theme (dark/light)
-   */
   const toggleTheme = () => {
     isDark.value = !isDark.value;
     if (isDark.value) {
@@ -380,34 +377,10 @@ export function useEpubReader() {
     applyFontTheme();
   };
 
-  /**
-   * Get current location CFI
-   */
-  const getCurrentCfi = () => {
-    if (!rendition) return null;
-    const location = rendition.currentLocation();
-    return location?.start?.cfi || null;
-  };
-
-  /**
-   * Save current progress
-   */
-  const saveProgress = () => {
-    if (!rendition || !bookStore.currentBookId) return;
-    const location = rendition.currentLocation();
-    if (location?.start?.cfi) {
-      bookStore.updateProgress(bookStore.currentBookId, location.start.cfi);
-    }
-  };
-
-  // Watch for font changes
   watch([() => bookStore.fontFamily, () => bookStore.fontSize], () => {
-    if (rendition) {
-      applyFontTheme();
-    }
+    applyFontTheme();
   });
 
-  // Setup resize listener
   onMounted(() => {
     window.addEventListener('resize', handleResize);
     if (isDark.value) {
@@ -417,20 +390,14 @@ export function useEpubReader() {
 
   onUnmounted(() => {
     window.removeEventListener('resize', handleResize);
-    if (resizeRaf) cancelAnimationFrame(resizeRaf);
     destroyReader();
   });
 
   return {
-    // State
     readerArea,
     toc,
     isDark,
     isLoading,
-    book,
-    rendition,
-
-    // Methods
     initReader,
     destroyReader,
     applyFontTheme,
@@ -439,7 +406,7 @@ export function useEpubReader() {
     prevSection,
     jumpToCfi,
     navigateToChapter,
-    handleKeydown,
+    handleKeydown: handleReaderKeydown,
     handleResize,
     toggleTheme,
     getCurrentCfi,

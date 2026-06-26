@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { useBookStore } from '../../stores/bookStore';
 import { useEpubReader } from '../../composables/useEpubReader';
-import ZCodeActivityBar from './ZCodeActivityBar.vue';
 import ZCodeTitleBar from './ZCodeTitleBar.vue';
 import ZCodeSidebar from './ZCodeSidebar.vue';
 import ZCodeCommandBox from './ZCodeCommandBox.vue';
@@ -11,240 +11,277 @@ import EpubReader from '../reader/EpubReader.vue';
 import TableOfContents from '../TableOfContents.vue';
 import FontSettings from '../FontSettings.vue';
 import BookmarkPanel from '../BookmarkPanel.vue';
-import { FileText, X, GitBranch } from 'lucide-vue-next';
-
-const emit = defineEmits(['switch-to-gemini']);
 
 const bookStore = useBookStore();
+const ZLIB_URL = 'https://z-library.sk/';
 const {
   readerArea,
   toc,
-  isDark,
   isLoading,
   initReader,
   destroyReader,
   applyFontTheme,
-  handleResize,
   nextSection,
   prevSection,
   jumpToCfi,
   navigateToChapter,
-  handleKeydown,
   getCurrentCfi,
-  saveProgress,
-  toggleTheme
+  saveProgress
 } = useEpubReader();
 
-// UI State
 const sidebarCollapsed = ref(false);
 const showTOC = ref(false);
 const showFontSettings = ref(false);
 const showBookmarks = ref(false);
 const showBossMode = ref(false);
 const showArticleCanvas = ref(false);
-const showCommandBox = ref(false);
-const activeActivityItem = ref('explorer');
-
-// EPUB Reader ref
+const showCommandBox = ref(true);
 const epubReaderRef = ref(null);
 
-// Current book info
 const currentBook = computed(() => {
   if (!bookStore.currentBookId) return null;
-  return bookStore.books.find(b => b.id === bookStore.currentBookId);
+  return bookStore.books.find((book) => book.id === bookStore.currentBookId) || null;
 });
 
-// Handle book selection from sidebar
-const handleSelectBook = async (bookId) => {
-  if (bookId === bookStore.currentBookId) return;
+const activeTabLabel = computed(() => {
+  return currentBook.value?.fakeTitle || 'Workspace';
+});
 
-  // Save progress before switching
-  if (bookStore.currentBookId) {
-    saveProgress();
+const statusProjectLabel = computed(() => currentBook.value?.fakeProject || 'NoteWeb');
+
+const ensureArticleSelected = () => {
+  if (bookStore.currentArticleId) {
+    const currentArticle = bookStore.getArticleById(bookStore.currentArticleId);
+    if (currentArticle) return currentArticle;
   }
 
-  bookStore.setCurrentBook(bookId);
+  if (bookStore.articles.length > 0) {
+    const article = bookStore.articles[0];
+    bookStore.setCurrentArticle(article.id);
+    return article;
+  }
 
-  // Wait for next tick to ensure readerArea is ready
+  return bookStore.createArticle({
+    title: 'Draft Notes',
+    content: ''
+  });
+};
+
+const isTypingTarget = (target) => {
+  if (!target || !target.tagName) return false;
+  const tagName = target.tagName.toUpperCase();
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName);
+};
+
+const syncReaderArea = () => {
+  const exposedArea = epubReaderRef.value?.readerArea;
+  if (exposedArea?.value) {
+    readerArea.value = exposedArea.value;
+  } else if (exposedArea) {
+    readerArea.value = exposedArea;
+  }
+};
+
+const reinitReaderIfNeeded = async () => {
+  if (!bookStore.currentBookId) return;
   await nextTick();
-
-  // Re-init reader with new book
+  syncReaderArea();
   await initReader();
 };
 
-// Handle new task (import EPUB)
+const handleSelectBook = async (bookId) => {
+  if (bookId === bookStore.currentBookId) return;
+  saveProgress();
+  bookStore.setCurrentBook(bookId);
+  showBossMode.value = false;
+  showArticleCanvas.value = false;
+  await reinitReaderIfNeeded();
+};
+
 const handleNewTask = () => {
-  // Trigger file input
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.epub';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (file && file.name.endsWith('.epub')) {
-      await bookStore.addBook(file);
-      const newBook = bookStore.books[bookStore.books.length - 1];
-      await handleSelectBook(newBook.id);
-    }
+  input.onchange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.name.toLowerCase().endsWith('.epub')) return;
+    const newBook = await bookStore.addBook(file);
+    await handleSelectBook(newBook.id);
   };
   input.click();
 };
 
-// Handle command box submit
 const handleCommandSubmit = (content) => {
   if (showArticleCanvas.value) {
-    // Append to article
-    const article = bookStore.articles[0];
-    if (article) {
-      const nextContent = article.content ? `${article.content}\n\n${content}` : content;
-      bookStore.updateArticle(article.id, { content: nextContent });
-    }
-  } else {
-    // Next page
-    nextSection();
+    const article = ensureArticleSelected();
+    const nextContent = article.content ? `${article.content}\n\n${content}` : content;
+    bookStore.updateArticle(article.id, { content: nextContent });
+    return;
   }
+
+  nextSection();
 };
 
-// Handle toggle article mode
 const handleToggleArticleCanvas = () => {
   showBossMode.value = false;
   showArticleCanvas.value = !showArticleCanvas.value;
-
-  // Ensure article exists
-  if (showArticleCanvas.value && bookStore.articles.length === 0) {
-    bookStore.createArticle({ title: 'New Article', content: '' });
+  if (showArticleCanvas.value) {
+    ensureArticleSelected();
   }
 };
 
-// Handle toggle boss mode
 const handleToggleBossMode = async () => {
-  // Save current progress before switching
   if (!showBossMode.value) {
     saveProgress();
   }
 
   showBossMode.value = !showBossMode.value;
-  showArticleCanvas.value = false;
 
-  // Restore position after switching back
-  if (!showBossMode.value && currentBook.value?.cfi) {
+  if (showBossMode.value) {
+    return;
+  }
+
+  if (currentBook.value?.cfi) {
     await nextTick();
     await jumpToCfi(currentBook.value.cfi);
   }
 };
 
-// Handle switch to Gemini shell
-const handleSwitchToGemini = () => {
-  saveProgress();
-  emit('switch-to-gemini');
-};
-
-// Handle open TOC
 const handleOpenTOC = () => {
+  if (!bookStore.currentBookId) return;
   showTOC.value = true;
 };
 
-const handleToggleCommandBox = async () => {
-  showCommandBox.value = !showCommandBox.value;
-  await nextTick();
-  handleResize();
+const handleOpenBookmarks = () => {
+  if (!bookStore.currentBookId) return;
+  showBookmarks.value = true;
 };
 
-// Handle open settings
-const handleOpenSettings = (type) => {
+const handleToggleCommandBox = () => {
+  showCommandBox.value = !showCommandBox.value;
+};
+
+const handleOpenSettings = () => {
   showFontSettings.value = true;
 };
 
-// Handle add bookmark
+const openInBrowser = (url) => {
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
+const handleOpenZLib = async () => {
+  if (!isTauri()) {
+    openInBrowser(ZLIB_URL);
+    return;
+  }
+
+  try {
+    await invoke('open_zlib');
+  } catch (error) {
+    console.error('Failed to open Z-Lib from Tauri command:', error);
+    openInBrowser(ZLIB_URL);
+  }
+};
+
 const handleAddBookmark = () => {
   if (!bookStore.currentBookId) return;
 
   const cfi = getCurrentCfi();
-  if (cfi) {
-    const label = prompt('请输入书签名称：', `书签 ${new Date().toLocaleString('zh-CN')}`);
-    if (label !== null && label.trim()) {
-      bookStore.addBookmark(bookStore.currentBookId, cfi, label.trim());
-      alert('书签添加成功！');
-    }
-  }
+  if (!cfi) return;
+
+  const label = window.prompt('Pin label', `Pin ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+  if (label === null) return;
+
+  const nextLabel = label.trim() || `Pin ${new Date().toLocaleDateString()}`;
+  bookStore.addBookmark(bookStore.currentBookId, cfi, nextLabel);
+  showBookmarks.value = true;
 };
 
-// Handle jump to bookmark
 const handleJumpToBookmark = (cfi) => {
   jumpToCfi(cfi);
 };
 
-// Handle font apply
 const handleFontApply = () => {
   applyFontTheme();
 };
 
-// Toggle sidebar
 const handleToggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 };
 
-// Handle activity item change
-const handleActivityChange = (itemId) => {
-  activeActivityItem.value = itemId;
-
-  // Handle special items
-  if (itemId === 'search') {
-    showTOC.value = true;
-  } else if (itemId === 'settings') {
-    showFontSettings.value = true;
-  }
-};
-
-// Keyboard shortcuts
-const handleGlobalKeydown = (e) => {
-  // Ctrl+B: Toggle boss mode
-  if (e.ctrlKey && e.key.toLowerCase() === 'b') {
-    e.preventDefault();
-    handleToggleBossMode();
+const handleGlobalKeydown = async (event) => {
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'l') {
+    event.preventDefault();
+    sidebarCollapsed.value = !sidebarCollapsed.value;
     return;
   }
 
-  // Skip if in boss mode or typing
-  if (showBossMode.value) return;
-  if (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName.toUpperCase())) return;
-
-  // Ctrl+K: Open TOC
-  if (e.ctrlKey && e.key.toLowerCase() === 'k') {
-    e.preventDefault();
-    showTOC.value = true;
+  if (event.ctrlKey && event.key.toLowerCase() === 'b') {
+    event.preventDefault();
+    await handleToggleBossMode();
     return;
   }
 
-  // Ctrl+D: Add bookmark
-  if (e.ctrlKey && e.key.toLowerCase() === 'd') {
-    e.preventDefault();
+  if (event.ctrlKey && event.key.toLowerCase() === 'o') {
+    event.preventDefault();
+    handleNewTask();
+    return;
+  }
+
+  if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+    event.preventDefault();
+    handleNewTask();
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    if (showTOC.value || showFontSettings.value || showBookmarks.value) {
+      event.preventDefault();
+      showTOC.value = false;
+      showFontSettings.value = false;
+      showBookmarks.value = false;
+      return;
+    }
+  }
+
+  if (isTypingTarget(event.target)) {
+    return;
+  }
+
+  if (event.ctrlKey && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    handleOpenTOC();
+    return;
+  }
+
+  if (event.ctrlKey && event.key.toLowerCase() === 'd') {
+    event.preventDefault();
     handleAddBookmark();
     return;
   }
 
-  // Arrow keys for navigation
-  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      prevSection();
-    } else {
-      nextSection();
-    }
-    e.preventDefault();
+  if (showBossMode.value) {
+    return;
+  }
+
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    prevSection();
+    return;
+  }
+
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'Enter') {
+    event.preventDefault();
+    nextSection();
   }
 };
 
-// Initialize
 onMounted(async () => {
   await bookStore.init();
+  await nextTick();
+  syncReaderArea();
 
-  // Sync readerArea ref with epubReaderRef
-  if (epubReaderRef.value?.readerArea) {
-    readerArea.value = epubReaderRef.value.readerArea;
-  }
-
-  // Init reader if we have a current book
   if (bookStore.currentBookId) {
-    await nextTick();
     await initReader();
   }
 
@@ -256,110 +293,74 @@ onUnmounted(() => {
   destroyReader();
 });
 
-// Watch for epubReaderRef to be ready
-watch(() => epubReaderRef.value?.readerArea, (newVal) => {
-  if (newVal) {
-    readerArea.value = newVal;
+watch(
+  () => epubReaderRef.value?.readerArea,
+  async () => {
+    syncReaderArea();
+    if (bookStore.currentBookId && readerArea.value && !isLoading.value) {
+      await initReader();
+    }
   }
-});
+);
 </script>
 
 <template>
   <div class="zcode-shell zcode-app flex h-screen w-screen overflow-hidden">
-    <!-- Activity Bar (Leftmost vertical icon bar) -->
-    <ZCodeActivityBar
-      :active-item="activeActivityItem"
-      @change-item="handleActivityChange"
-    />
-
-    <!-- Sidebar -->
     <ZCodeSidebar
       :collapsed="sidebarCollapsed"
       :current-book-id="bookStore.currentBookId"
       @select-book="handleSelectBook"
       @new-task="handleNewTask"
-      @open-search="showTOC = true"
+      @back="prevSection"
+      @forward="nextSection"
+      @open-search="handleOpenTOC"
+      @open-zlib="handleOpenZLib"
       @open-settings="handleOpenSettings"
       @toggle-collapsed="handleToggleSidebar"
     />
 
-    <!-- Main content area -->
-    <div class="flex-1 flex flex-col min-w-0 bg-[var(--zc-bg)]">
-      <!-- Title bar -->
+    <main class="zcode-main-workbench">
       <ZCodeTitleBar
-        :title="currentBook?.fakeTitle || 'No Task Selected'"
-        project-name="GeminiReader"
-        branch-name="main"
+        :title="activeTabLabel"
+        :project-name="statusProjectLabel"
+        branch-name="master"
+        :command-open="showCommandBox"
         @back="prevSection"
         @forward="nextSection"
         @toggle-sidebar="handleToggleSidebar"
-        :command-open="showCommandBox"
         @open-toc="handleOpenTOC"
+        @open-bookmarks="handleOpenBookmarks"
         @toggle-command="handleToggleCommandBox"
         @open-settings="handleOpenSettings"
-        @switch-to-gemini="handleSwitchToGemini"
       />
 
-      <!-- Tabs bar -->
-      <div class="zcode-tabs-container">
-        <div class="zcode-tab" :class="{ active: bookStore.currentBookId }">
-          <FileText :size="14" class="mr-2" />
-          <span class="truncate">{{ currentBook?.fakeTitle || 'Welcome' }}</span>
-          <button class="ml-2 hover:bg-[var(--zc-hover)] rounded p-0.5">
-            <X :size="12" />
-          </button>
-        </div>
-      </div>
+      <div class="zcode-main-stage">
+        <ZCodeReaderSurface
+          :show-boss-mode="showBossMode"
+          :show-article-canvas="showArticleCanvas"
+          @toggle-boss-mode="handleToggleBossMode"
+          @toggle-article-canvas="handleToggleArticleCanvas"
+        >
+          <EpubReader
+            ref="epubReaderRef"
+            :book-id="bookStore.currentBookId"
+            min-height="100%"
+            max-height="100%"
+          />
+        </ZCodeReaderSurface>
 
-      <!-- Reader surface -->
-      <ZCodeReaderSurface
-        :show-boss-mode="showBossMode"
-        :show-article-canvas="showArticleCanvas"
-        @toggle-boss-mode="handleToggleBossMode"
-        @toggle-article-canvas="handleToggleArticleCanvas"
-      >
-        <!-- EPUB Reader slot -->
-        <EpubReader
-          ref="epubReaderRef"
-          :book-id="bookStore.currentBookId"
-          min-height="100%"
-          max-height="100%"
+        <ZCodeCommandBox
+          v-if="showCommandBox"
+          :class="{ 'is-reader-active': bookStore.currentBookId }"
+          :is-article-mode="showArticleCanvas"
+          :project-name="statusProjectLabel"
+          branch-name="master"
+          @submit="handleCommandSubmit"
+          @toggle-article-mode="handleToggleArticleCanvas"
         />
-      </ZCodeReaderSurface>
-
-      <ZCodeCommandBox
-        v-if="showCommandBox"
-        :is-article-mode="showArticleCanvas"
-        @submit="handleCommandSubmit"
-        @toggle-article-mode="handleToggleArticleCanvas"
-      />
-
-      <!-- Status bar -->
-      <div class="zcode-status-bar">
-        <div class="flex items-center space-x-2">
-          <div class="zcode-status-item">
-            <GitBranch :size="12" class="mr-1" />
-            <span>main</span>
-          </div>
-          <div class="zcode-status-item">
-            <span>0 errors, 0 warnings</span>
-          </div>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="zcode-status-item">
-            <span>Ln 1, Col 1</span>
-          </div>
-          <div class="zcode-status-item">
-            <span>UTF-8</span>
-          </div>
-          <div class="zcode-status-item">
-            <span>TypeScript</span>
-          </div>
-        </div>
       </div>
-    </div>
+    </main>
 
-    <!-- Modals -->
     <TableOfContents
       :show="showTOC"
       :toc="toc"
@@ -368,11 +369,7 @@ watch(() => epubReaderRef.value?.readerArea, (newVal) => {
       @navigate="navigateToChapter"
     />
 
-    <FontSettings
-      :show="showFontSettings"
-      @close="showFontSettings = false"
-      @apply="handleFontApply"
-    />
+    <FontSettings :show="showFontSettings" @close="showFontSettings = false" @apply="handleFontApply" />
 
     <BookmarkPanel
       :show="showBookmarks"

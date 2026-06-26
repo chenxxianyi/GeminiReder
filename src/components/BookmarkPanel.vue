@@ -25,7 +25,7 @@ const handleJumpTo = (bookmark) => {
 };
 
 const handleDelete = (bookmarkId) => {
-  if (confirm('确定要删除这个书签吗？')) {
+  if (confirm('Delete this pin?')) {
     bookStore.removeBookmark(props.bookId, bookmarkId);
   }
 };
@@ -48,35 +48,17 @@ const cancelEdit = () => {
   editingLabel.value = '';
 };
 
-const handleAddBookmark = () => {
-  emit('addBookmark');
-};
-
 const formatDate = (timestamp) => {
   const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now - date;
-  
-  // 小于1分钟
-  if (diff < 60000) {
-    return '刚刚';
-  }
-  // 小于1小时
-  if (diff < 3600000) {
-    return `${Math.floor(diff / 60000)} 分钟前`;
-  }
-  // 小于1天
-  if (diff < 86400000) {
-    return `${Math.floor(diff / 3600000)} 小时前`;
-  }
-  // 小于7天
-  if (diff < 604800000) {
-    return `${Math.floor(diff / 86400000)} 天前`;
-  }
-  
-  return date.toLocaleDateString('zh-CN', { 
-    year: 'numeric', 
-    month: 'numeric', 
+  const diff = Date.now() - timestamp;
+
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} hr ago`;
+  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)} d ago`;
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
@@ -86,101 +68,97 @@ const formatDate = (timestamp) => {
 
 <template>
   <Transition name="slide">
-    <div v-if="show" class="fixed top-0 right-0 h-full w-80 bg-gem-sidebar border-l border-gem-border shadow-2xl z-40 flex flex-col">
-      <!-- 头部 -->
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gem-border">
+    <div
+      v-if="show"
+      class="fixed top-0 right-0 z-40 flex h-full w-80 flex-col border-l border-gem-border bg-gem-sidebar shadow-2xl"
+    >
+      <div class="flex items-center justify-between border-b border-gem-border px-4 py-3">
         <div class="flex items-center space-x-2">
           <Bookmark :size="20" class="text-gem-blue" />
-          <h3 class="text-base font-medium text-gem-text-primary">书签</h3>
+          <h3 class="text-base font-medium text-gem-text-primary">Pins</h3>
           <span class="text-xs text-gem-text-muted">({{ bookmarks.length }})</span>
         </div>
-        <button @click="emit('close')" class="p-1.5 hover:bg-gem-hover rounded-full transition-colors">
+        <button class="rounded-full p-1.5 transition-colors hover:bg-gem-hover" @click="emit('close')">
           <X :size="18" class="text-gem-text-secondary" />
         </button>
       </div>
 
-      <!-- 添加书签按钮 -->
-      <div class="px-4 py-3 border-b border-gem-border">
+      <div class="border-b border-gem-border px-4 py-3">
         <button
-          @click="handleAddBookmark"
-          class="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-gem-blue hover:opacity-90 text-black rounded-lg transition-opacity font-medium"
+          class="flex w-full items-center justify-center space-x-2 rounded-lg bg-gem-blue px-4 py-2.5 font-medium text-black transition-opacity hover:opacity-90"
+          @click="emit('addBookmark')"
         >
           <Plus :size="18" />
-          <span class="text-sm">添加书签</span>
+          <span class="text-sm">Add Pin</span>
         </button>
       </div>
 
-      <!-- 书签列表 -->
       <div class="flex-1 overflow-y-auto">
-        <div v-if="bookmarks.length === 0" class="flex flex-col items-center justify-center h-full text-center px-4">
-          <Bookmark :size="48" class="text-gem-text-muted mb-3 opacity-30" />
-          <p class="text-gem-text-secondary text-sm mb-1">还没有书签</p>
-          <p class="text-gem-text-muted text-xs">点击上方按钮添加书签</p>
+        <div
+          v-if="bookmarks.length === 0"
+          class="flex h-full flex-col items-center justify-center px-4 text-center"
+        >
+          <Bookmark :size="48" class="mb-3 opacity-30 text-gem-text-muted" />
+          <p class="mb-1 text-sm text-gem-text-secondary">No pins yet</p>
+          <p class="text-xs text-gem-text-muted">Save a location to revisit it quickly.</p>
         </div>
 
-        <div v-else class="p-3 space-y-2">
+        <div v-else class="space-y-2 p-3">
           <div
             v-for="bookmark in bookmarks"
             :key="bookmark.id"
-            class="bg-gem-surface rounded-lg p-3 border border-gem-border hover:border-gem-blue transition-all group"
+            class="group rounded-lg border border-gem-border bg-gem-surface p-3 transition-all hover:border-gem-blue"
           >
-            <!-- 编辑模式 -->
             <div v-if="editingId === bookmark.id" class="space-y-2">
               <input
                 v-model="editingLabel"
                 type="text"
-                class="w-full bg-gem-bg border border-gem-blue rounded px-2 py-1 text-sm text-gem-text-primary outline-none"
+                autofocus
+                class="w-full rounded border border-gem-blue bg-gem-bg px-2 py-1 text-sm text-gem-text-primary outline-none"
                 @keyup.enter="saveEdit(bookmark.id)"
                 @keyup.esc="cancelEdit"
-                autofocus
               />
               <div class="flex items-center justify-end space-x-1">
                 <button
+                  class="rounded bg-gem-blue p-1.5 text-black transition-opacity hover:opacity-90"
                   @click="saveEdit(bookmark.id)"
-                  class="p-1.5 bg-gem-blue text-black rounded hover:opacity-90 transition-opacity"
                 >
                   <Check :size="14" />
                 </button>
                 <button
+                  class="rounded bg-gem-border p-1.5 text-gem-text-secondary transition-colors hover:bg-gem-hover"
                   @click="cancelEdit"
-                  class="p-1.5 bg-gem-border text-gem-text-secondary rounded hover:bg-gem-hover transition-colors"
                 >
                   <X :size="14" />
                 </button>
               </div>
             </div>
 
-            <!-- 显示模式 -->
             <div v-else>
-              <div class="flex items-start justify-between mb-2">
-                <button
-                  @click="handleJumpTo(bookmark)"
-                  class="flex-1 text-left"
-                >
-                  <p class="text-sm text-gem-text-primary font-medium hover:text-gem-blue transition-colors">
+              <div class="mb-2 flex items-start justify-between">
+                <button class="flex-1 text-left" @click="handleJumpTo(bookmark)">
+                  <p class="text-sm font-medium text-gem-text-primary transition-colors hover:text-gem-blue">
                     {{ bookmark.label }}
                   </p>
                 </button>
-                <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="flex items-center space-x-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
+                    class="rounded p-1.5 transition-colors hover:bg-gem-hover"
+                    title="Rename pin"
                     @click="startEdit(bookmark)"
-                    class="p-1.5 hover:bg-gem-hover rounded transition-colors"
-                    title="编辑"
                   >
                     <Edit2 :size="14" class="text-gem-text-muted" />
                   </button>
                   <button
+                    class="rounded p-1.5 transition-colors hover:bg-red-500/20"
+                    title="Delete pin"
                     @click="handleDelete(bookmark.id)"
-                    class="p-1.5 hover:bg-red-500/20 rounded transition-colors"
-                    title="删除"
                   >
                     <Trash2 :size="14" class="text-red-400" />
                   </button>
                 </div>
               </div>
-              <p class="text-xs text-gem-text-muted">
-                {{ formatDate(bookmark.createdAt) }}
-              </p>
+              <p class="text-xs text-gem-text-muted">{{ formatDate(bookmark.createdAt) }}</p>
             </div>
           </div>
         </div>
