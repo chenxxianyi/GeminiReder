@@ -5,7 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Archive,
-  BookOpen,
+  Globe2,
   Folder,
   ListFilter,
   Maximize2,
@@ -34,7 +34,7 @@ const emit = defineEmits([
   'back',
   'forward',
   'open-search',
-  'open-zlib',
+  'open-browser',
   'toggle-collapsed',
   'open-settings'
 ]);
@@ -140,10 +140,10 @@ const selectTask = (task) => {
         <span>搜索</span>
         <kbd>Ctrl+K</kbd>
       </button>
-      <button class="zcode-sidebar-action" title="Open Z-Lib" @click="$emit('open-zlib')">
-        <BookOpen :size="22" :stroke-width="1.75" />
-        <span>Z-Lib</span>
-        <kbd>Web</kbd>
+      <button class="zcode-sidebar-action" title="打开网页" @click="$emit('open-browser')">
+        <Globe2 :size="22" :stroke-width="1.75" />
+        <span>浏览器</span>
+        <kbd>Ctrl+L</kbd>
       </button>
       <button class="zcode-sidebar-action" @click="$emit('open-settings', 'font')">
         <Wand2 :size="22" :stroke-width="1.75" />

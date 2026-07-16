@@ -11,13 +11,9 @@ import {
 } from 'lucide-vue-next';
 
 const props = defineProps({
-  showBossMode: {
-    type: Boolean,
-    default: false
-  },
-  showArticleCanvas: {
-    type: Boolean,
-    default: false
+  mode: {
+    type: String,
+    default: 'home'
   }
 });
 
@@ -82,7 +78,7 @@ watch(
 
 <template>
   <div class="zcode-reader-surface flex-1 overflow-hidden bg-[var(--zc-editor-bg)]">
-    <div v-show="showBossMode" class="h-full overflow-y-auto zcode-scroll p-8">
+    <div v-show="mode === 'boss'" class="h-full overflow-y-auto zcode-scroll p-8">
       <div class="mx-auto max-w-5xl">
         <div class="mb-6 flex items-center justify-between border-b border-[var(--zc-border-soft)] pb-4">
           <div>
@@ -120,7 +116,7 @@ watch(
       </div>
     </div>
 
-    <div v-show="!showBossMode && showArticleCanvas" class="h-full overflow-y-auto zcode-scroll p-8">
+    <div v-show="mode === 'article'" class="h-full overflow-y-auto zcode-scroll p-8">
       <div class="mx-auto max-w-5xl">
         <div
           class="min-h-[360px] whitespace-pre-wrap rounded-md border border-[var(--zc-border-soft)] bg-[#0d0d0d] p-4 font-mono text-sm leading-7 text-[var(--zc-text)] outline-none focus:ring-1 focus:ring-[var(--zc-accent)]"
@@ -134,7 +130,7 @@ watch(
     </div>
 
     <div
-      v-show="!showBossMode && !showArticleCanvas && !bookStore.currentBookId"
+      v-show="mode === 'home'"
       class="zcode-empty-home"
     >
       <div class="zcode-watermark" aria-hidden="true">
@@ -145,7 +141,7 @@ watch(
     </div>
 
     <div
-      v-show="!showBossMode && !showArticleCanvas && bookStore.currentBookId"
+      v-show="mode === 'reader'"
       class="zcode-reader-workspace zcode-scroll"
     >
       <section class="zcode-reader-thread" :aria-label="readerLabel">
@@ -183,6 +179,10 @@ watch(
           </button>
         </div>
       </section>
+    </div>
+
+    <div v-show="mode === 'browser'" class="h-full min-h-0 overflow-hidden">
+      <slot name="browser"></slot>
     </div>
   </div>
 </template>

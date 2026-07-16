@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
-import { invoke, isTauri } from '@tauri-apps/api/core';
 import { useBookStore } from '../../stores/bookStore';
 import { useEpubReader } from '../../composables/useEpubReader';
+import ZCodeBrowserSurface from './ZCodeBrowserSurface.vue';
 import ZCodeTitleBar from './ZCodeTitleBar.vue';
 import ZCodeSidebar from './ZCodeSidebar.vue';
 import ZCodeCommandBox from './ZCodeCommandBox.vue';
@@ -13,7 +13,7 @@ import TableOfContents from '../TableOfContents.vue';
 import FontSettings from '../FontSettings.vue';
 
 const bookStore = useBookStore();
-const ZLIB_URL = 'https://z-library.sk/';
+const DEFAULT_BROWSER_URL = 'https://www.zhihu.com/';
 const {
   readerArea,
   toc,
@@ -35,9 +35,18 @@ const showTOC = ref(false);
 const showFontSettings = ref(false);
 const showProgressPanel = ref(false);
 const progressStatus = ref('');
-const showBossMode = ref(false);
-const showArticleCanvas = ref(false);
 const showCommandBox = ref(true);
+const surfaceMode = ref('home');
+const previousSurfaceMode = ref('home');
+const browserSurfaceRef = ref(null);
+const browserState = ref({
+  url: DEFAULT_BROWSER_URL,
+  host: 'zhihu.com',
+  title: 'zhihu.com',
+  loading: false,
+  ready: false,
+  error: ''
+});
 const epubReaderRef = ref(null);
 let readerInitTimer = null;
 
@@ -47,10 +56,27 @@ const currentBook = computed(() => {
 });
 
 const activeTabLabel = computed(() => {
+  if (surfaceMode.value === 'browser') {
+    return browserState.value.title || browserState.value.host || 'Web';
+  }
   return currentBook.value?.fakeTitle || 'Workspace';
 });
 
-const statusProjectLabel = computed(() => currentBook.value?.fakeProject || 'NoteWeb');
+const statusProjectLabel = computed(() => {
+  if (surfaceMode.value === 'browser') return 'Web';
+  return currentBook.value?.fakeProject || 'NoteWeb';
+});
+
+const branchLabel = computed(() => {
+  if (surfaceMode.value === 'browser') return browserState.value.host || 'web';
+  return 'master';
+});
+
+const hasBlockingOverlay = computed(() => {
+  return showTOC.value || showFontSettings.value || showProgressPanel.value || surfaceMode.value === 'boss';
+});
+
+const browserActive = computed(() => surfaceMode.value === 'browser' && !hasBlockingOverlay.value);
 
 const ensureArticleSelected = () => {
   if (bookStore.currentArticleId) {
@@ -115,11 +141,13 @@ const handleRefreshReader = async () => {
 };
 
 const handleSelectBook = async (bookId) => {
-  if (bookId === bookStore.currentBookId) return;
+  if (bookId === bookStore.currentBookId) {
+    surfaceMode.value = 'reader';
+    return;
+  }
   saveProgress();
   bookStore.setCurrentBook(bookId);
-  showBossMode.value = false;
-  showArticleCanvas.value = false;
+  surfaceMode.value = 'reader';
   await reinitReaderIfNeeded();
 };
 
@@ -137,39 +165,75 @@ const handleNewTask = () => {
 };
 
 const handleCommandSubmit = (content) => {
-  if (showArticleCanvas.value) {
+  if (surfaceMode.value === 'article') {
     const article = ensureArticleSelected();
     const nextContent = article.content ? `${article.content}\n\n${content}` : content;
     bookStore.updateArticle(article.id, { content: nextContent });
     return;
   }
 
-  nextSection();
+  if (surfaceMode.value === 'reader') {
+    nextSection();
+  }
 };
 
 const handleToggleArticleCanvas = () => {
-  showBossMode.value = false;
-  showArticleCanvas.value = !showArticleCanvas.value;
-  if (showArticleCanvas.value) {
+  if (surfaceMode.value === 'article') {
+    surfaceMode.value = currentBook.value ? 'reader' : 'home';
+    return;
+  }
+
+  surfaceMode.value = 'article';
+  if (surfaceMode.value === 'article') {
     ensureArticleSelected();
   }
 };
 
 const handleToggleBossMode = async () => {
-  if (!showBossMode.value) {
-    saveProgress();
-  }
-
-  showBossMode.value = !showBossMode.value;
-
-  if (showBossMode.value) {
+  if (surfaceMode.value !== 'boss') {
+    if (surfaceMode.value === 'reader') saveProgress();
+    previousSurfaceMode.value = surfaceMode.value;
+    surfaceMode.value = 'boss';
     return;
   }
 
-  if (currentBook.value?.cfi) {
+  surfaceMode.value = previousSurfaceMode.value || (currentBook.value ? 'reader' : 'home');
+  if (surfaceMode.value === 'reader' && currentBook.value?.cfi) {
     await nextTick();
     await jumpToCfi(currentBook.value.cfi);
   }
+};
+
+const handleOpenBrowser = async () => {
+  if (surfaceMode.value === 'reader') saveProgress();
+  surfaceMode.value = 'browser';
+  showCommandBox.value = false;
+  await nextTick();
+  browserSurfaceRef.value?.focusAddress();
+};
+
+const handleCloseBrowser = () => {
+  surfaceMode.value = currentBook.value ? 'reader' : 'home';
+};
+
+const handleBrowserStateChange = (state) => {
+  browserState.value = { ...browserState.value, ...state };
+};
+
+const handleBack = () => {
+  if (surfaceMode.value === 'browser') {
+    browserSurfaceRef.value?.goBack();
+    return;
+  }
+  if (surfaceMode.value === 'reader') prevSection();
+};
+
+const handleForward = () => {
+  if (surfaceMode.value === 'browser') {
+    browserSurfaceRef.value?.goForward();
+    return;
+  }
+  if (surfaceMode.value === 'reader') nextSection();
 };
 
 const handleOpenTOC = () => {
@@ -190,24 +254,6 @@ const handleToggleCommandBox = () => {
 
 const handleOpenSettings = () => {
   showFontSettings.value = true;
-};
-
-const openInBrowser = (url) => {
-  window.open(url, '_blank', 'noopener,noreferrer');
-};
-
-const handleOpenZLib = async () => {
-  if (!isTauri()) {
-    openInBrowser(ZLIB_URL);
-    return;
-  }
-
-  try {
-    await invoke('open_zlib');
-  } catch (error) {
-    console.error('Failed to open Z-Lib from Tauri command:', error);
-    openInBrowser(ZLIB_URL);
-  }
 };
 
 const buildProgressLabel = () => {
@@ -272,6 +318,18 @@ const handleGlobalKeydown = async (event) => {
     return;
   }
 
+  if (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'l') {
+    event.preventDefault();
+    await handleOpenBrowser();
+    return;
+  }
+
+  if (event.ctrlKey && event.key.toLowerCase() === 'r' && surfaceMode.value === 'browser') {
+    event.preventDefault();
+    browserSurfaceRef.value?.reload();
+    return;
+  }
+
   if (event.ctrlKey && event.key.toLowerCase() === 'o') {
     event.preventDefault();
     handleNewTask();
@@ -310,17 +368,28 @@ const handleGlobalKeydown = async (event) => {
     return;
   }
 
-  if (showBossMode.value) {
+  if (surfaceMode.value === 'boss') {
     return;
   }
 
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+  if (surfaceMode.value === 'browser') {
+    if (event.altKey && event.key === 'ArrowLeft') {
+      event.preventDefault();
+      browserSurfaceRef.value?.goBack();
+    } else if (event.altKey && event.key === 'ArrowRight') {
+      event.preventDefault();
+      browserSurfaceRef.value?.goForward();
+    }
+    return;
+  }
+
+  if (surfaceMode.value === 'reader' && (event.key === 'ArrowLeft' || event.key === 'ArrowUp')) {
     event.preventDefault();
     prevSection();
     return;
   }
 
-  if (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'Enter') {
+  if (surfaceMode.value === 'reader' && (event.key === 'ArrowRight' || event.key === 'ArrowDown' || event.key === 'Enter')) {
     event.preventDefault();
     nextSection();
   }
@@ -332,7 +401,10 @@ onMounted(async () => {
   syncReaderArea();
 
   if (bookStore.currentBookId) {
+    surfaceMode.value = 'reader';
     scheduleReaderInit();
+  } else {
+    surfaceMode.value = 'home';
   }
 
   window.addEventListener('keydown', handleGlobalKeydown);
@@ -365,10 +437,10 @@ watch(
       :current-book-id="bookStore.currentBookId"
       @select-book="handleSelectBook"
       @new-task="handleNewTask"
-      @back="prevSection"
-      @forward="nextSection"
+      @back="handleBack"
+      @forward="handleForward"
       @open-search="handleOpenTOC"
-      @open-zlib="handleOpenZLib"
+      @open-browser="handleOpenBrowser"
       @open-settings="handleOpenSettings"
       @toggle-collapsed="handleToggleSidebar"
     />
@@ -377,11 +449,11 @@ watch(
       <ZCodeTitleBar
         :title="activeTabLabel"
         :project-name="statusProjectLabel"
-        branch-name="master"
+        :branch-name="branchLabel"
         :command-open="showCommandBox"
         :sidebar-collapsed="sidebarCollapsed"
-        @back="prevSection"
-        @forward="nextSection"
+        @back="handleBack"
+        @forward="handleForward"
         @toggle-sidebar="handleToggleSidebar"
         @open-toc="handleOpenTOC"
         @open-progress="handleOpenProgressPanel"
@@ -391,8 +463,7 @@ watch(
 
       <div class="zcode-main-stage">
         <ZCodeReaderSurface
-          :show-boss-mode="showBossMode"
-          :show-article-canvas="showArticleCanvas"
+          :mode="surfaceMode"
           @toggle-boss-mode="handleToggleBossMode"
           @toggle-article-canvas="handleToggleArticleCanvas"
           @refresh-reader="handleRefreshReader"
@@ -405,16 +476,28 @@ watch(
             @ready="handleReaderReady"
             @loaded="handleReaderReady"
           />
+
+          <template #browser>
+            <ZCodeBrowserSurface
+              ref="browserSurfaceRef"
+              :active="browserActive"
+              :command-open="showCommandBox"
+              :initial-url="browserState.url"
+              :suspended="hasBlockingOverlay"
+              @close="handleCloseBrowser"
+              @state-change="handleBrowserStateChange"
+            />
+          </template>
         </ZCodeReaderSurface>
 
         <ZCodeCommandBox
           v-if="showCommandBox"
-          :class="{ 'is-reader-active': bookStore.currentBookId }"
-          :is-article-mode="showArticleCanvas"
-          :placeholder="bookStore.currentBookId ? '提出后续修改要求' : '向 ZCode 提问，输入 @ 添加文件，/ 使用命令，$ 使用技能，# 关联对话'"
+          :class="{ 'is-reader-active': bookStore.currentBookId || surfaceMode === 'browser' }"
+          :is-article-mode="surfaceMode === 'article'"
+          :placeholder="surfaceMode === 'browser' ? '网页模式下可通过上方地址栏访问内容' : (bookStore.currentBookId ? '提出后续修改要求' : '向 ZCode 提问，输入 @ 添加文件，/ 使用命令，$ 使用技能，# 关联对话')"
           model-name="GLM-5.2"
           :project-name="statusProjectLabel"
-          branch-name="master"
+          :branch-name="branchLabel"
           @submit="handleCommandSubmit"
           @toggle-article-mode="handleToggleArticleCanvas"
         />
@@ -436,7 +519,7 @@ watch(
       :show="showProgressPanel"
       :book-id="bookStore.currentBookId"
       :project-name="statusProjectLabel"
-      branch-name="master"
+      :branch-name="branchLabel"
       :status="progressStatus"
       @close="showProgressPanel = false"
       @add-record="handleAddProgressRecord"
