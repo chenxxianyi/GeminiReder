@@ -22,6 +22,7 @@ const bookStore = useBookStore();
 const {
   readerArea,
   toc,
+  activeTocHref,
   initReader,
   destroyReader,
   applyFontTheme,
@@ -290,6 +291,7 @@ watch(
     <TableOfContents
       :show="showTOC"
       :toc="toc"
+      :active-href="activeTocHref"
       :book-title="currentBook?.title || ''"
       @close="showTOC = false"
       @navigate="navigateToChapter"

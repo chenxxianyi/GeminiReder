@@ -37,11 +37,34 @@ const isTypingTarget = (target) => {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName);
 };
 
+const normalizeHref = (href = '') => {
+  const cleanedHref = String(href)
+    .replace(/\\/g, '/')
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '');
+
+  try {
+    return decodeURIComponent(cleanedHref);
+  } catch {
+    return cleanedHref;
+  }
+};
+
+const getHrefTail = (href = '') => normalizeHref(href).split('/').filter(Boolean).pop() || '';
+
+const flattenToc = (items = []) => {
+  return items.flatMap((item) => [item, ...flattenToc(item.subitems || [])]);
+};
+
 export function useEpubReader() {
   const bookStore = useBookStore();
 
   const readerArea = ref(null);
   const toc = ref([]);
+  const activeTocHref = ref('');
+  const currentChapterLabel = ref('');
   const isDark = ref(true);
   const isLoading = ref(false);
 
@@ -377,6 +400,8 @@ export function useEpubReader() {
     }
 
     toc.value = [];
+    activeTocHref.value = '';
+    currentChapterLabel.value = '';
   };
 
   const waitForReaderArea = async () => {
@@ -428,6 +453,26 @@ export function useEpubReader() {
     }
   };
 
+  const syncActiveTocFromHref = (href) => {
+    const normalizedHref = normalizeHref(href);
+    if (!normalizedHref) return;
+
+    const items = flattenToc(toc.value);
+    const exactMatch = items.find((item) => normalizeHref(item.href) === normalizedHref);
+    const tail = getHrefTail(normalizedHref);
+    const activeItem = exactMatch || items.find((item) => getHrefTail(item.href) === tail);
+
+    activeTocHref.value = activeItem?.href || href;
+    currentChapterLabel.value = activeItem?.label || '';
+  };
+
+  const syncActiveTocFromLocation = (location) => {
+    const href = location?.start?.href || location?.end?.href;
+    if (href) {
+      syncActiveTocFromHref(href);
+    }
+  };
+
   const getCurrentCfi = () => {
     if (!rendition) return null;
     const location = rendition.currentLocation();
@@ -455,6 +500,7 @@ export function useEpubReader() {
     if (!rendition || !book || !href) return;
 
     try {
+      syncActiveTocFromHref(href);
       await rendition.display(href);
       await new Promise((resolve) => setTimeout(resolve, 150));
       applyFontTheme();
@@ -472,6 +518,7 @@ export function useEpubReader() {
         const spineItem = book.spine.get(href);
         if (spineItem) {
           await rendition.display(spineItem.index);
+          syncActiveTocFromHref(href);
           await new Promise((resolve) => setTimeout(resolve, 150));
           applyFontTheme();
           handleResize();
@@ -484,6 +531,7 @@ export function useEpubReader() {
       const cleanHref = href.split('#')[0];
       try {
         await rendition.display(cleanHref);
+        syncActiveTocFromHref(cleanHref);
         await new Promise((resolve) => setTimeout(resolve, 150));
         applyFontTheme();
         handleResize();
@@ -558,6 +606,7 @@ export function useEpubReader() {
         if (bookStore.currentBookId && cfi) {
           bookStore.updateProgress(bookStore.currentBookId, cfi);
         }
+        syncActiveTocFromLocation(location);
       });
 
       const navigation = await book.loaded.navigation;
@@ -566,6 +615,7 @@ export function useEpubReader() {
 
       await rendition.display();
       if (requestId !== initRequestId) return;
+      syncActiveTocFromLocation(rendition.currentLocation());
       applyFontTheme();
       handleResize();
 
@@ -578,6 +628,7 @@ export function useEpubReader() {
           await rendition.display();
         }
         if (requestId !== initRequestId) return;
+        syncActiveTocFromLocation(rendition.currentLocation());
         applyFontTheme();
       }
 
@@ -623,6 +674,8 @@ export function useEpubReader() {
   return {
     readerArea,
     toc,
+    activeTocHref,
+    currentChapterLabel,
     isDark,
     isLoading,
     initReader,

@@ -17,6 +17,7 @@ const ZLIB_URL = 'https://z-library.sk/';
 const {
   readerArea,
   toc,
+  activeTocHref,
   isLoading,
   initReader,
   destroyReader,
@@ -423,6 +424,7 @@ watch(
     <TableOfContents
       :show="showTOC"
       :toc="toc"
+      :active-href="activeTocHref"
       :book-title="currentBook?.title || ''"
       @close="showTOC = false"
       @navigate="navigateToChapter"

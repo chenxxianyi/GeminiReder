@@ -1,6 +1,6 @@
 <script setup>
-import { ref, watch } from 'vue';
-import { ChevronRight, ChevronDown, X, Search } from 'lucide-vue-next';
+import { nextTick, ref, watch } from 'vue';
+import { X, Search } from 'lucide-vue-next';
 
 const props = defineProps({
   show: Boolean,
@@ -9,6 +9,10 @@ const props = defineProps({
     default: () => []
   },
   currentCfi: String,
+  activeHref: {
+    type: String,
+    default: ''
+  },
   bookTitle: {
     type: String,
     default: ''
@@ -18,6 +22,69 @@ const props = defineProps({
 const emit = defineEmits(['close', 'navigate']);
 
 const expandedItems = ref(new Set());
+const tocScrollEl = ref(null);
+
+const normalizeHref = (href = '') => {
+  const cleanedHref = String(href)
+    .replace(/\\/g, '/')
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '');
+
+  try {
+    return decodeURIComponent(cleanedHref);
+  } catch {
+    return cleanedHref;
+  }
+};
+
+const getHrefTail = (href = '') => normalizeHref(href).split('/').filter(Boolean).pop() || '';
+
+const isHrefMatch = (leftHref = '', rightHref = '') => {
+  const left = normalizeHref(leftHref);
+  const right = normalizeHref(rightHref);
+  if (!left || !right) return false;
+  return left === right || getHrefTail(left) === getHrefTail(right);
+};
+
+const itemContainsHref = (item, activeHref) => {
+  if (!activeHref) return false;
+  if (isHrefMatch(item.href, activeHref)) return true;
+  return (item.subitems || []).some((subitem) => itemContainsHref(subitem, activeHref));
+};
+
+const collectActiveParentKeys = (items = [], activeHref = '', parentKey = '') => {
+  const keys = [];
+
+  items.forEach((item, index) => {
+    const itemKey = parentKey
+      ? `${parentKey}/${item.id || item.href || `toc-${index}`}`
+      : getTocItemKey(item, index);
+
+    if ((item.subitems || []).some((subitem) => itemContainsHref(subitem, activeHref))) {
+      keys.push(itemKey);
+      keys.push(...collectActiveParentKeys(item.subitems || [], activeHref, itemKey));
+    }
+  });
+
+  return keys;
+};
+
+const scrollActiveItemIntoView = async () => {
+  await nextTick();
+  const activeEl = tocScrollEl.value?.querySelector('[data-toc-active="true"]');
+  activeEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+};
+
+const revealActiveItem = async () => {
+  if (!props.activeHref) return;
+  expandedItems.value = new Set([
+    ...expandedItems.value,
+    ...collectActiveParentKeys(props.toc, props.activeHref)
+  ]);
+  await scrollActiveItemIntoView();
+};
 
 watch(
   () => props.toc,
@@ -33,22 +100,34 @@ watch(
   () => props.show,
   (visible) => {
     if (visible) {
-      expandedItems.value = new Set();
+      expandedItems.value = new Set(collectActiveParentKeys(props.toc, props.activeHref));
+      scrollActiveItemIntoView();
+    }
+  }
+);
+
+watch(
+  () => props.activeHref,
+  () => {
+    if (props.show) {
+      revealActiveItem();
     }
   }
 );
 
 const toggleExpand = (id) => {
-  if (expandedItems.value.has(id)) {
-    expandedItems.value.delete(id);
-    return;
+  const nextExpandedItems = new Set(expandedItems.value);
+
+  if (nextExpandedItems.has(id)) {
+    nextExpandedItems.delete(id);
+  } else {
+    nextExpandedItems.add(id);
   }
-  expandedItems.value.add(id);
+
+  expandedItems.value = nextExpandedItems;
 };
 
-const isExpanded = (id) => {
-  return expandedItems.value.has(id);
-};
+const getTocItemKey = (item, index) => item.id || item.href || `toc-${index}`;
 
 const handleNavigate = (item) => {
   emit('navigate', item.href);
@@ -80,7 +159,7 @@ const handleNavigate = (item) => {
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
+      <div ref="tocScrollEl" class="flex-1 overflow-y-auto">
         <div
           v-if="toc.length === 0"
           class="flex h-full flex-col items-center justify-center px-4 text-center"
@@ -96,8 +175,10 @@ const handleNavigate = (item) => {
             :key="item.id || index"
             :item="item"
             :level="0"
-            :expanded="isExpanded(item.id || index)"
-            @toggle="toggleExpand(item.id || index)"
+            :item-key="getTocItemKey(item, index)"
+            :expanded-items="expandedItems"
+            :active-href="activeHref"
+            @toggle="toggleExpand"
             @navigate="handleNavigate"
           />
         </div>
@@ -121,66 +202,120 @@ const TocItem = defineComponent({
       type: Number,
       required: true
     },
-    expanded: {
-      type: Boolean,
-      default: false
+    expandedItems: {
+      type: Object,
+      required: true
+    },
+    itemKey: {
+      type: String,
+      required: true
+    },
+    activeHref: {
+      type: String,
+      default: ''
     }
   },
   emits: ['toggle', 'navigate'],
   setup(props, { emit }) {
-    const hasChildren = props.item.subitems && props.item.subitems.length > 0;
-    const paddingLeft = `${props.level * 16 + 12}px`;
+    const normalizeItemHref = (href = '') => {
+      const cleanedHref = String(href)
+        .replace(/\\/g, '/')
+        .split('?')[0]
+        .split('#')[0]
+        .replace(/^\.\//, '')
+        .replace(/^\/+/, '');
+
+      try {
+        return decodeURIComponent(cleanedHref);
+      } catch {
+        return cleanedHref;
+      }
+    };
+
+    const getItemHrefTail = (href = '') => normalizeItemHref(href).split('/').filter(Boolean).pop() || '';
+    const isItemActive = (href = '') => {
+      const itemHref = normalizeItemHref(href);
+      const activeHref = normalizeItemHref(props.activeHref);
+      if (!itemHref || !activeHref) return false;
+      return itemHref === activeHref || getItemHrefTail(itemHref) === getItemHrefTail(activeHref);
+    };
+
+    const hasActiveDescendant = (item) => {
+      return (item.subitems || []).some((subitem) => isItemActive(subitem.href) || hasActiveDescendant(subitem));
+    };
 
     return () =>
-      h('div', { class: 'toc-item' }, [
-        h(
-          'div',
-          {
-            class: 'group flex cursor-pointer items-center px-3 py-2 transition-colors hover:bg-gem-hover',
-            style: { paddingLeft },
-            onClick: () => {
-              if (hasChildren) {
-                emit('navigate', props.item);
-                emit('toggle');
-                return;
-              }
-              emit('navigate', props.item);
-            }
-          },
-          [
-            hasChildren &&
-              h('div', { class: 'mr-2 flex-shrink-0' }, [
-                props.expanded
-                  ? h(ChevronDown, { size: 16, class: 'text-gem-text-muted' })
-                  : h(ChevronRight, { size: 16, class: 'text-gem-text-muted' })
-              ]),
-            h(
-              'span',
-              {
-                class: 'flex-1 truncate text-sm text-gem-text-primary transition-colors group-hover:text-gem-blue',
-                title: props.item.label
-              },
-              props.item.label
-            )
-          ]
-        ),
-        hasChildren &&
-          props.expanded &&
+      {
+        const subitems = props.item.subitems || [];
+        const hasChildren = subitems.length > 0;
+        const isExpanded = props.expandedItems.has(props.itemKey);
+        const isActive = isItemActive(props.item.href);
+        const isActiveParent = !isActive && hasActiveDescendant(props.item);
+        const paddingLeft = `${props.level * 16 + 12}px`;
+
+        return h('div', { class: 'toc-item' }, [
           h(
             'div',
-            { class: 'toc-children' },
-            props.item.subitems.map((subitem, index) =>
-              h(TocItem, {
-                key: subitem.id || `${props.item.id}-${index}`,
-                item: subitem,
-                level: props.level + 1,
-                expanded: false,
-                onToggle: () => emit('toggle', subitem.id || `${props.item.id}-${index}`),
-                onNavigate: (item) => emit('navigate', item)
+            {
+              class: [
+                'toc-row group flex cursor-pointer items-center px-3 py-2 transition-colors hover:bg-gem-hover',
+                isActive ? 'toc-row-active' : '',
+                isActiveParent ? 'toc-row-parent-active' : ''
+              ],
+              'data-toc-active': isActive ? 'true' : undefined,
+              style: { paddingLeft },
+              onClick: () => {
+                if (hasChildren) {
+                  emit('toggle', props.itemKey);
+                  return;
+                }
+
+                emit('navigate', props.item);
+              }
+            },
+            [
+              hasChildren &&
+                h('div', { class: 'mr-2 flex-shrink-0' }, [
+                  isExpanded
+                    ? h(ChevronDown, { size: 16, class: 'text-gem-text-muted' })
+                    : h(ChevronRight, { size: 16, class: 'text-gem-text-muted' })
+                ]),
+              h(
+                'span',
+                {
+                  class: [
+                    'flex-1 truncate text-sm transition-colors group-hover:text-gem-blue',
+                    isActive ? 'font-semibold text-gem-blue' : 'text-gem-text-primary',
+                    isActiveParent ? 'text-gem-text-primary' : ''
+                  ],
+                  title: props.item.label
+                },
+                props.item.label
+              )
+            ]
+          ),
+          hasChildren &&
+            isExpanded &&
+            h(
+              'div',
+              { class: 'toc-children' },
+              subitems.map((subitem, index) => {
+                const subitemKey = `${props.itemKey}/${subitem.id || subitem.href || `toc-${index}`}`;
+
+                return h(TocItem, {
+                  key: subitemKey,
+                  item: subitem,
+                  level: props.level + 1,
+                  itemKey: subitemKey,
+                  expandedItems: props.expandedItems,
+                  activeHref: props.activeHref,
+                  onToggle: (id) => emit('toggle', id),
+                  onNavigate: (item) => emit('navigate', item)
+                });
               })
             )
-          )
-      ]);
+        ]);
+      };
   }
 });
 
@@ -196,5 +331,28 @@ export { TocItem };
 .slide-enter-from,
 .slide-leave-to {
   transform: translateX(100%);
+}
+
+.toc-row {
+  position: relative;
+}
+
+.toc-row-active {
+  background: rgba(66, 133, 244, 0.14);
+}
+
+.toc-row-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: #4285f4;
+}
+
+.toc-row-parent-active {
+  background: rgba(255, 255, 255, 0.04);
 }
 </style>
