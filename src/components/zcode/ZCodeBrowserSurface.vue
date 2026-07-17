@@ -2,8 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
+import { listen } from '@tauri-apps/api/event';
 import { Webview } from '@tauri-apps/api/webview';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   ArrowLeft,
   ArrowRight,
@@ -52,6 +52,7 @@ let statePoller = null;
 let loadingTimer = null;
 let boundsFrame = null;
 let boundsSyncing = false;
+let unlistenNewWindow = null;
 
 const displayHost = computed(() => {
   try {
@@ -172,33 +173,25 @@ const createBrowserWebview = async (url) => {
   }
 
   const bounds = viewportRef.value?.getBoundingClientRect();
-  browserWebview = new Webview(getCurrentWindow(), BROWSER_WEBVIEW_LABEL, {
+  await invoke('browser_create', {
     url,
     x: Math.round((bounds?.left || 0) + 1),
     y: Math.round((bounds?.top || 0) + 1),
     width: Math.max(2, Math.round((bounds?.width || 800) - 2)),
-    height: Math.max(2, Math.round((bounds?.height || 600) - 2)),
-    focus: false,
-    incognito: false,
-    devtools: import.meta.env.DEV,
-    zoomHotkeysEnabled: true
+    height: Math.max(2, Math.round((bounds?.height || 600) - 2))
   });
 
-  browserWebview.once('tauri://created', async () => {
-    isReady.value = true;
-    errorMessage.value = '';
-    await syncBounds();
-    startPolling();
-    finishLoadingSoon();
-    emitState();
-  });
+  browserWebview = await Webview.getByLabel(BROWSER_WEBVIEW_LABEL);
+  if (!browserWebview) {
+    throw new Error('原生网页视图创建后无法访问');
+  }
 
-  browserWebview.once('tauri://error', (event) => {
-    isReady.value = false;
-    isLoading.value = false;
-    errorMessage.value = `网页视图创建失败：${event?.payload || event}`;
-    emitState();
-  });
+  isReady.value = true;
+  errorMessage.value = '';
+  await syncBounds();
+  startPolling();
+  finishLoadingSoon();
+  emitState();
 
   return true;
 };
@@ -334,7 +327,15 @@ watch(
   }
 );
 
-onMounted(() => {
+onMounted(async () => {
+  if (isDesktop) {
+    unlistenNewWindow = await listen('browser-new-window', (event) => {
+      if (typeof event.payload === 'string') {
+        navigate(event.payload);
+      }
+    });
+  }
+
   resizeObserver = new ResizeObserver(scheduleBoundsSync);
   if (viewportRef.value) resizeObserver.observe(viewportRef.value);
   window.addEventListener('resize', scheduleBoundsSync);
@@ -346,6 +347,8 @@ onUnmounted(async () => {
   if (loadingTimer) window.clearTimeout(loadingTimer);
   if (boundsFrame) window.cancelAnimationFrame(boundsFrame);
   resizeObserver?.disconnect();
+  unlistenNewWindow?.();
+  unlistenNewWindow = null;
   window.removeEventListener('resize', scheduleBoundsSync);
 
   try {

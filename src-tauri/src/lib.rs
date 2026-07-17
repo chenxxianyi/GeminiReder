@@ -1,4 +1,6 @@
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+const ZCODE_BROWSER_THEME_SCRIPT: &str = include_str!("browser_theme.js");
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -6,6 +8,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       open_zlib,
       open_external_url,
+      browser_create,
       browser_navigate,
       browser_reload,
       browser_go_back,
@@ -34,6 +37,51 @@ fn browser_webview(app: &tauri::AppHandle) -> Result<tauri::Webview, String> {
   app
     .get_webview("browser-view")
     .ok_or_else(|| "browser webview is not ready".into())
+}
+
+#[tauri::command]
+async fn browser_create(
+  app: tauri::AppHandle,
+  url: String,
+  x: f64,
+  y: f64,
+  width: f64,
+  height: f64,
+) -> Result<(), String> {
+  if app.get_webview("browser-view").is_some() {
+    return Ok(());
+  }
+
+  let parsed = parse_web_url(&url)?;
+  let window = app
+    .get_window("main")
+    .ok_or_else(|| "main window is not ready".to_string())?;
+  let event_app = app.clone();
+
+  let builder = tauri::webview::WebviewBuilder::new(
+    "browser-view",
+    tauri::WebviewUrl::External(parsed),
+  )
+  .focused(false)
+  .incognito(false)
+  .devtools(cfg!(debug_assertions))
+  .zoom_hotkeys_enabled(true)
+  .initialization_script(ZCODE_BROWSER_THEME_SCRIPT)
+  .on_new_window(move |url, _features| {
+    if matches!(url.scheme(), "http" | "https") {
+      let _ = event_app.emit_to("main", "browser-new-window", url.to_string());
+    }
+    tauri::webview::NewWindowResponse::Deny
+  });
+
+  window
+    .add_child(
+      builder,
+      tauri::LogicalPosition::new(x, y),
+      tauri::LogicalSize::new(width.max(2.0), height.max(2.0)),
+    )
+    .map(|_| ())
+    .map_err(|error| format!("failed to create browser webview: {error}"))
 }
 
 #[tauri::command]
