@@ -140,7 +140,7 @@ const handleRefreshReader = async () => {
   await reinitReaderIfNeeded();
 };
 
-const handleSelectBook = async (bookId) => {
+const handleSelectBook = (bookId) => {
   if (bookId === bookStore.currentBookId) {
     surfaceMode.value = 'reader';
     return;
@@ -148,7 +148,6 @@ const handleSelectBook = async (bookId) => {
   saveProgress();
   bookStore.setCurrentBook(bookId);
   surfaceMode.value = 'reader';
-  await reinitReaderIfNeeded();
 };
 
 const handleNewTask = () => {
@@ -212,7 +211,8 @@ const handleOpenBrowser = async () => {
   browserSurfaceRef.value?.focusAddress();
 };
 
-const handleCloseBrowser = () => {
+const handleCloseBrowser = async () => {
+  await browserSurfaceRef.value?.closeBrowser();
   surfaceMode.value = currentBook.value ? 'reader' : 'home';
 };
 
@@ -428,6 +428,22 @@ watch(
     }
   }
 );
+
+watch(surfaceMode, async (mode, previousMode) => {
+  if (previousMode === 'reader' && mode !== 'reader') {
+    saveProgress();
+    destroyReader();
+  }
+
+  if (previousMode === 'browser' && mode !== 'browser') {
+    await browserSurfaceRef.value?.closeBrowser();
+  }
+
+  if (mode === 'reader' && bookStore.currentBookId) {
+    await nextTick();
+    scheduleReaderInit();
+  }
+});
 </script>
 
 <template>
@@ -469,6 +485,7 @@ watch(
           @refresh-reader="handleRefreshReader"
         >
           <EpubReader
+            v-if="surfaceMode === 'reader'"
             ref="epubReaderRef"
             :book-id="bookStore.currentBookId"
             min-height="100%"

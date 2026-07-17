@@ -53,6 +53,7 @@ let loadingTimer = null;
 let boundsFrame = null;
 let boundsSyncing = false;
 let unlistenNewWindow = null;
+let closePromise = null;
 
 const displayHost = computed(() => {
   try {
@@ -130,6 +131,46 @@ const stopPolling = () => {
   statePoller = null;
 };
 
+const clearTransientWork = () => {
+  stopPolling();
+  if (loadingTimer) {
+    window.clearTimeout(loadingTimer);
+    loadingTimer = null;
+  }
+  if (boundsFrame) {
+    window.cancelAnimationFrame(boundsFrame);
+    boundsFrame = null;
+  }
+};
+
+const closeBrowser = async () => {
+  if (closePromise) return closePromise;
+
+  closePromise = (async () => {
+    clearTransientWork();
+    const webview = browserWebview || (isDesktop ? await Webview.getByLabel(BROWSER_WEBVIEW_LABEL) : null);
+    browserWebview = null;
+    isReady.value = false;
+    isLoading.value = false;
+    boundsSyncing = false;
+
+    if (webview) {
+      try {
+        await webview.close();
+      } catch (error) {
+        // Closing an already-crashed or already-removed WebView is harmless.
+        console.warn('[ZCode Browser] Failed to close native webview:', error);
+      }
+    }
+
+    emitState();
+  })().finally(() => {
+    closePromise = null;
+  });
+
+  return closePromise;
+};
+
 const syncBounds = async () => {
   boundsFrame = null;
   if (!isDesktop || !browserWebview || !props.active || props.suspended || boundsSyncing) return;
@@ -158,6 +199,8 @@ const scheduleBoundsSync = () => {
 };
 
 const createBrowserWebview = async (url) => {
+  if (closePromise) await closePromise;
+
   const rect = viewportRef.value?.getBoundingClientRect();
   if (!rect || rect.width < 2 || rect.height < 2) {
     await nextTick();
@@ -343,22 +386,16 @@ onMounted(async () => {
 });
 
 onUnmounted(async () => {
-  stopPolling();
-  if (loadingTimer) window.clearTimeout(loadingTimer);
-  if (boundsFrame) window.cancelAnimationFrame(boundsFrame);
+  clearTransientWork();
   resizeObserver?.disconnect();
   unlistenNewWindow?.();
   unlistenNewWindow = null;
   window.removeEventListener('resize', scheduleBoundsSync);
 
-  try {
-    await browserWebview?.hide();
-  } catch (error) {
-    console.warn('[ZCode Browser] Failed to hide webview during cleanup:', error);
-  }
+  await closeBrowser();
 });
 
-defineExpose({ focusAddress, goBack, goForward, navigate, reload });
+defineExpose({ closeBrowser, focusAddress, goBack, goForward, navigate, reload });
 </script>
 
 <template>

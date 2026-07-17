@@ -517,66 +517,16 @@
   }
 
   if (isZhihuAnswer) {
-    const fluidContainers = [
-      '.QuestionAnswers-answers',
-      '.QuestionAnswer-content',
-      '.List',
-      '.List-item',
-      '.AnswerItem',
-      '.RichContent',
-      '.RichContent-inner',
-      '.RichText'
-    ].join(',');
-    const flowingText = [
-      '.RichText p',
-      '.RichText div:not(.highlight)',
-      '.RichText span',
-      '.RichText li'
-    ].join(',');
-
-    const normalizeAnswerLayout = () => {
-      document.documentElement.style.setProperty('min-width', '0', 'important');
-      document.documentElement.style.setProperty('max-width', '100%', 'important');
-      document.documentElement.style.setProperty('overflow-x', 'auto', 'important');
-      document.body?.style.setProperty('min-width', '0', 'important');
-      document.body?.style.setProperty('max-width', '100%', 'important');
-      document.body?.style.setProperty('overflow-x', 'visible', 'important');
-
-      document.querySelectorAll(fluidContainers).forEach((element) => {
-        element.style.setProperty('width', 'auto', 'important');
-        element.style.setProperty('min-width', '0', 'important');
-        element.style.setProperty('max-width', '100%', 'important');
-        element.style.setProperty('margin-left', '0', 'important');
-        element.style.setProperty('margin-right', '0', 'important');
-      });
-
-      document.querySelectorAll(flowingText).forEach((element) => {
-        if (element.closest('pre, code, .highlight')) return;
-        element.style.setProperty('min-width', '0', 'important');
-        element.style.setProperty('max-width', '100%', 'important');
-        element.style.setProperty('white-space', 'normal', 'important');
-        element.style.setProperty('overflow-wrap', 'anywhere', 'important');
-        element.style.setProperty('word-break', 'break-word', 'important');
-      });
-
+    // The CSS above already applies to content added by Zhihu's virtual list.
+    // Avoid observing and rescanning the entire document on every DOM mutation.
+    const resetHorizontalScroll = () => {
       if (document.scrollingElement?.scrollLeft) {
         document.scrollingElement.scrollLeft = 0;
       }
     };
 
-    let normalizationFrame = 0;
-    const scheduleNormalization = () => {
-      if (normalizationFrame) cancelAnimationFrame(normalizationFrame);
-      normalizationFrame = requestAnimationFrame(() => {
-        normalizationFrame = 0;
-        normalizeAnswerLayout();
-      });
-    };
-
-    scheduleNormalization();
-    window.addEventListener('DOMContentLoaded', scheduleNormalization, { once: true });
-    window.addEventListener('pageshow', scheduleNormalization);
-    window.addEventListener('resize', scheduleNormalization);
-    new MutationObserver(scheduleNormalization).observe(document, { childList: true, subtree: true });
+    resetHorizontalScroll();
+    window.addEventListener('DOMContentLoaded', resetHorizontalScroll, { once: true });
+    window.addEventListener('pageshow', resetHorizontalScroll);
   }
 })();

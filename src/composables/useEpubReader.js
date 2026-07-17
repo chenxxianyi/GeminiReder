@@ -592,7 +592,9 @@ export function useEpubReader() {
         width: renderWidth,
         height: renderHeight,
         flow: 'scrolled-doc',
-        manager: 'continuous'
+        // Keep only the active chapter mounted. The continuous manager retains
+        // multiple iframe views and their decoded images on long reading sessions.
+        manager: 'default'
       });
 
       rendition.on('rendered', (_, view) => {
